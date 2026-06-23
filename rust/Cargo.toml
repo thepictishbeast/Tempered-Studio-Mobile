@@ -2,12 +2,16 @@
 name = "tempered_seam"
 version = "0.1.0"
 edition = "2021"
-description = "JNI shim exposing the Tempered Studio language seam (rpro-lang) to the Android app"
+description = "JNI shim exposing the Tempered Studio language seam + offline curriculum to the Android app"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
 jni = "0.21"
+serde_json = "1"
 rpro-lang = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration" }
 rpro-lang-rust = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration", package = "rpro-lang-rust" }
+rpro-runner = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration", package = "rpro-runner" }
+rpro-state = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration", package = "rpro-state" }
+rpro-storage-fs = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration", package = "rpro-storage-fs" }

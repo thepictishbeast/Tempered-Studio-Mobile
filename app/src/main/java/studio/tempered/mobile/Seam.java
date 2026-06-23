@@ -15,4 +15,7 @@ public final class Seam {
 
     /** A starter file the seam generates for a concept. */
     public static native String exerciseTemplate(String concept);
+
+    /** The exercise curriculum as /api/exercises JSON, read offline from a seeded store dir. */
+    public static native String exercisesJson(String storeDir);
 }
