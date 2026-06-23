@@ -18,4 +18,13 @@ public final class Seam {
 
     /** The exercise curriculum as /api/exercises JSON, read offline from a seeded store dir. */
     public static native String exercisesJson(String storeDir);
+
+    /** The current exercise as /api/current JSON (first exercise if none is Current). */
+    public static native String currentJson(String storeDir);
+
+    /** Book table of contents as /api/book JSON. */
+    public static native String bookTocJson(String storeDir);
+
+    /** One book chapter's cleaned markdown as /api/book?chapter=ID JSON. */
+    public static native String bookChapterJson(String storeDir, String chapter);
 }

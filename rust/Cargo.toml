@@ -15,3 +15,4 @@ rpro-lang-rust = { git = "https://github.com/thepictishbeast/Tempered-Studio", b
 rpro-runner = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration", package = "rpro-runner" }
 rpro-state = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration", package = "rpro-state" }
 rpro-storage-fs = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration", package = "rpro-storage-fs" }
+rpro-book = { git = "https://github.com/thepictishbeast/Tempered-Studio", branch = "textbook-integration", package = "rpro-book" }

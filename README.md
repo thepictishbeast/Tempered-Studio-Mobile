@@ -5,7 +5,7 @@ architecture extended to a phone. This is the separate mobile repo the main
 project's `docs/DISTRIBUTION.md` calls for (kept out of the Rust workspace so the
 Android/Gradle toolchain doesn't muddy it).
 
-## Status — v0.1 (buildable APK, real UI)
+## Status — v0.2 (offline study app: embedded seam, real curriculum)
 
 A minimal Java app whose single `Activity` hosts a `WebView` that loads the
 **same single-file `gui/` shell** shipped on web and desktop (vendored under

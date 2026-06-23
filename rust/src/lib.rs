@@ -87,3 +87,88 @@ pub extern "system" fn Java_studio_tempered_mobile_Seam_exercisesJson<'a>(
     let out = serde_json::json!({ "exercises": items, "done": done, "total": total }).to_string();
     jstr(&mut env, &out)
 }
+
+use rpro_lang::BookRef;
+
+/// The current exercise as /api/current JSON, OFFLINE. Mirrors rpro-serve's
+/// current_handler/current_json; falls back to the first exercise when the
+/// fresh store has nothing marked Current yet (so the app always shows one).
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_currentJson<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let exercises = rpro_runner::discover(&store.root().join("exercises")).unwrap_or_default();
+    let progress = store.load_progress().unwrap_or_default();
+    let current_id = progress
+        .entries
+        .iter()
+        .find(|(_, e)| e.status == ExerciseStatus::Current)
+        .map(|(id, _)| id.clone());
+    let ex = match current_id {
+        Some(id) => exercises.into_iter().find(|e| e.meta.id == id),
+        None => exercises.into_iter().next(),
+    };
+    let out = match ex {
+        Some(ex) => {
+            let code = std::fs::read_to_string(&ex.source).unwrap_or_default();
+            let m = &ex.meta;
+            serde_json::json!({
+                "exercise": m.id, "title": m.title, "code": code, "concept": m.concept,
+                "difficulty": m.difficulty, "estimated_minutes": m.estimated_minutes,
+                "book_refs": m.book_refs,
+            })
+            .to_string()
+        }
+        None => serde_json::json!({ "exercise": null }).to_string(),
+    };
+    jstr(&mut env, &out)
+}
+
+/// Book table of contents as /api/book JSON (no query), OFFLINE.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_bookTocJson<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let book = rpro_book::Book::load(&store.root().join("book")).unwrap_or_default();
+    let chapters: Vec<serde_json::Value> = book
+        .chapters
+        .values()
+        .map(|c| serde_json::json!({ "id": c.id, "title": c.title() }))
+        .collect();
+    jstr(&mut env, &serde_json::json!({ "chapters": chapters }).to_string())
+}
+
+/// One book chapter's cleaned markdown as /api/book?chapter=ID JSON, OFFLINE.
+/// `chapter` is a map key (never a path join), exactly like rpro-serve.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_bookChapterJson<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+    chapter: JString<'a>,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let ch: String = env.get_string(&chapter).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let book = rpro_book::Book::load(&store.root().join("book")).unwrap_or_default();
+    let out = match book.get(&ch) {
+        Some(c) => {
+            let url = RustLanguage.book_ref_url(&BookRef {
+                chapter: c.id.clone(),
+                anchor: None,
+                why: String::new(),
+            });
+            serde_json::json!({ "id": c.id, "markdown": c.display_markdown(&url) }).to_string()
+        }
+        None => serde_json::json!({ "chapter": null }).to_string(),
+    };
+    jstr(&mut env, &out)
+}
