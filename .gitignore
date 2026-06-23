@@ -4,3 +4,7 @@ local.properties
 *.iml
 .idea/
 captures/
+
+# cross-compiled seam (rebuilt from rust/ by build-apk.sh)
+/app/src/main/jniLibs/
+/rust/target/
