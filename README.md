@@ -7,10 +7,20 @@ Android/Gradle toolchain doesn't muddy it).
 
 ## Status — v0.2 (offline study app: embedded seam, real curriculum)
 
-A minimal Java app whose single `Activity` hosts a `WebView` that loads the
-**same single-file `gui/` shell** shipped on web and desktop (vendored under
-`app/src/main/assets/gui/`). With no local server the shell falls back to its
-built-in **static demo**, so the APK previews the real product layout offline.
+A minimal Java app whose single `Activity` hosts a `WebView` running the **same
+single-file `gui/` shell** shipped on web and desktop — served, together with its
+read-only `/api/*` endpoints, from a virtual `https://` origin so `fetch()` works
+(Chromium blocks `fetch` to `file://`). The `/api/*` calls are answered **offline
+by the embedded Rust seam over JNI** (`libtempered_seam.so`), which reads a store
+seeded from the bundled `exercises/` + `book/`. So the app shows the **real
+32-exercise curriculum, the current exercise + lesson, and the book — with no
+network**. (Compiling the learner's code needs a toolchain Android lacks, so
+`Run`/`Check` fall through; a remote/online toolchain or a future on-device one
+is the next step.)
+
+Verified end-to-end on an Android-34 emulator: boots, the seam `.so` loads, and
+the real UI renders offline (curriculum, current exercise, book, "on-device
+seam: rust" banner).
 
 - **Builds to a real, installable APK** — `studio.tempered.mobile`, minSdk 24,
   targetSdk 34. No AndroidX, no Kotlin plugin, no extra deps (only the Android
