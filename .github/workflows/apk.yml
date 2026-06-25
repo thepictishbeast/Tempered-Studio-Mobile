@@ -24,9 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The APK bundles the shared web shell + curriculum (gui/ + exercises/ +
-      # book/) from the main repo. Both repos are public, so no token is needed.
-      - name: fetch Tempered-Studio assets (gui + exercises + book)
+      # The APK bundles the shared web shell + the full offline store (gui/ +
+      # exercises/ + book/ + glossary/ + lessons/) from the main repo. Both repos
+      # are public, so no token is needed. The clone is what build-apk.sh syncs in.
+      - name: fetch Tempered-Studio assets (gui + exercises + book + glossary + lessons)
         run: |
           rm -rf "$RUNNER_TEMP/tempered-studio"
           git clone --depth 1 --branch textbook-integration \
