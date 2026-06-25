@@ -9,15 +9,21 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # Use the rustup toolchain (which has the android std targets), not a system rust.
-export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
-export PATH="$HOME/.cargo/bin:$PATH"
+# Default to paul's install (where the android targets live) rather than $HOME,
+# so the build works regardless of which user/service-account runs it (the CI
+# runner's $HOME is not paul's). Override RUSTUP_HOME/CARGO_HOME for other setups.
+export RUSTUP_HOME="${RUSTUP_HOME:-/home/paul/.rustup}"
+export CARGO_HOME="${CARGO_HOME:-/home/paul/.cargo}"
+export PATH="$CARGO_HOME/bin:$PATH"
 
 echo "[1/3] cross-compiling the seam (rpro-lang) -> jniLibs"
 ( cd "$HERE/rust" && cargo ndk \
     -t arm64-v8a -t armeabi-v7a -t x86 -t x86_64 \
     -o "$HERE/app/src/main/jniLibs" build --release )
 
-SIB="$HERE/../Tempered-Studio"
+# Sibling Tempered-Studio checkout (gui + exercises + book). Defaults to the
+# adjacent dir for local builds; CI sets $TS_SIBLING to wherever it checked it out.
+SIB="${TS_SIBLING:-$HERE/../Tempered-Studio}"
 if [ -d "$SIB/gui" ]; then
   echo "[2/3] syncing gui/ + store (exercises, book) from $SIB"
   rm -rf "$HERE/app/src/main/assets/gui";            cp -r "$SIB/gui"       "$HERE/app/src/main/assets/gui"

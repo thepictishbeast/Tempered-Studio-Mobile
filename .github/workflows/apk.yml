@@ -1,0 +1,53 @@
+name: apk
+# Build the offline Android study app and make it DOWNLOADABLE.
+#
+# The APK is DEBUG-signed → sideloadable on any device with "install unknown
+# apps" enabled, with no private keys involved. (A Play-Store / F-Droid RELEASE
+# build needs a real keystore — tracked separately; that one needs Paul's keys.)
+#
+# Every push to main uploads the APK as a workflow ARTIFACT (download it from the
+# run's Summary page). Pushing a tag (v*) also attaches it to a GitHub RELEASE,
+# so it has a stable download URL.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # for the release upload on tags
+
+jobs:
+  build-apk:
+    name: build debug APK (sideloadable)
+    runs-on: [self-hosted, linux, x64, plausiden]
+    steps:
+      - uses: actions/checkout@v4
+
+      # The APK bundles the shared web shell + curriculum (gui/ + exercises/ +
+      # book/) from the main repo. Both repos are public, so no token is needed.
+      - name: fetch Tempered-Studio assets (gui + exercises + book)
+        run: |
+          rm -rf "$RUNNER_TEMP/tempered-studio"
+          git clone --depth 1 --branch textbook-integration \
+            https://github.com/thepictishbeast/Tempered-Studio.git \
+            "$RUNNER_TEMP/tempered-studio"
+
+      - name: build the debug APK
+        env:
+          TS_SIBLING: ${{ runner.temp }}/tempered-studio
+        run: bash build-apk.sh
+
+      - name: upload APK artifact (download from the run Summary)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tempered-studio-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: attach APK to the GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
