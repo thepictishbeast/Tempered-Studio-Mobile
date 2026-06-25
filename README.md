@@ -5,6 +5,17 @@ architecture extended to a phone. This is the separate mobile repo the main
 project's `docs/DISTRIBUTION.md` calls for (kept out of the Rust workspace so the
 Android/Gradle toolchain doesn't muddy it).
 
+## 📥 Download
+
+**[Latest APK → Releases](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/latest)**
+(or the [v0.2.0 release](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/tag/v0.2.0)).
+
+It's a **debug-signed** APK — sideloadable on any phone: enable *"install unknown
+apps"* for your browser/file manager, download, tap to install. No Play Store, no
+account, fully offline once installed. (A Play-Store / F-Droid *release* build
+needs a signing keystore — separate.) Every push to `main` also publishes a fresh
+APK as a workflow artifact via [`.github/workflows/apk.yml`](.github/workflows/apk.yml).
+
 ## Status — v0.2 (offline study app: embedded seam, real curriculum)
 
 A minimal Java app whose single `Activity` hosts a `WebView` running the **same
@@ -13,7 +24,7 @@ read-only `/api/*` endpoints, from a virtual `https://` origin so `fetch()` work
 (Chromium blocks `fetch` to `file://`). The `/api/*` calls are answered **offline
 by the embedded Rust seam over JNI** (`libtempered_seam.so`), which reads a store
 seeded from the bundled `exercises/` + `book/`. So the app shows the **real
-32-exercise curriculum, the current exercise + lesson, and the book — with no
+curriculum (65 exercises across 11 phases) + 33 Rust Book chapters — with no
 network**. (Compiling the learner's code needs a toolchain Android lacks, so
 `Run`/`Check` fall through; a remote/online toolchain or a future on-device one
 is the next step.)
