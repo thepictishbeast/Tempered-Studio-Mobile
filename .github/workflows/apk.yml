@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # The APK bundles the shared web shell + the full offline store (gui/ +
-      # exercises/ + book/ + glossary/ + lessons/ + quizzes/) from the main repo.
+      # exercises/ + book/ + glossary/ + lessons/ + quizzes/ + cheatsheets/) from main.
       # Both repos are public, so no token is needed; build-apk.sh syncs the clone.
       - name: fetch Tempered-Studio assets (gui + exercises + book + glossary + lessons)
         run: |
