@@ -26,12 +26,13 @@ echo "[1/3] cross-compiling the seam (rpro-lang) -> jniLibs"
 # $TS_SIBLING to wherever it checked it out.
 SIB="${TS_SIBLING:-$HERE/../Tempered-Studio}"
 if [ -d "$SIB/gui" ]; then
-  echo "[2/3] syncing gui/ + store (exercises, book, glossary, lessons) from $SIB"
+  echo "[2/3] syncing gui/ + store (exercises, book, glossary, lessons, quizzes) from $SIB"
   rm -rf "$HERE/app/src/main/assets/gui";             cp -r "$SIB/gui"       "$HERE/app/src/main/assets/gui"
   rm -rf "$HERE/app/src/main/assets/store/exercises"; cp -r "$SIB/exercises" "$HERE/app/src/main/assets/store/exercises"
   rm -rf "$HERE/app/src/main/assets/store/book";      cp -r "$SIB/book"      "$HERE/app/src/main/assets/store/book"
   rm -rf "$HERE/app/src/main/assets/store/glossary";  cp -r "$SIB/glossary"  "$HERE/app/src/main/assets/store/glossary"
   rm -rf "$HERE/app/src/main/assets/store/lessons";   cp -r "$SIB/lessons"   "$HERE/app/src/main/assets/store/lessons"
+  rm -rf "$HERE/app/src/main/assets/store/quizzes";   cp -r "$SIB/quizzes"   "$HERE/app/src/main/assets/store/quizzes"
 else
   echo "[2/3] asset sync skipped (no sibling Tempered-Studio checkout)"
 fi
