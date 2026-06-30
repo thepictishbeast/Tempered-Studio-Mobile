@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -57,6 +59,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void runViaTermux(final String code, final String cbId) {
             runOnUiThread(new Runnable() { public void run() { doTermuxRun(code, cbId); } });
         }
+
+        /** Reliable clipboard copy (WebView's navigator.clipboard is flaky). */
+        @JavascriptInterface public void copyText(final String s) {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    cm.setPrimaryClip(ClipData.newPlainText("Tempered Studio", s == null ? "" : s));
+                } catch (Exception e) {}
+            }});
+        }
+
+        /** Mirror in-app log events to logcat (adb logcat -s TemperedStudio:*). */
+        @JavascriptInterface public void log(String tag, String msg) {
+            try { android.util.Log.i("TemperedStudio:" + tag, msg == null ? "" : msg); } catch (Exception e) {}
+        }
     }
 
     // ── Native on-device Run via Termux's RUN_COMMAND intent ─────────────────────
@@ -90,10 +107,14 @@ public class MainActivity extends Activity {
         exec.setClassName("com.termux", "com.termux.app.RunCommandService");
         exec.setAction("com.termux.RUN_COMMAND");
         exec.putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash");
+        // Speed: -C prefer-dynamic links libstd dynamically (skips the slow static
+        // link of all of std) + -C debuginfo=0 — big win for tiny programs. The run
+        // then needs the sysroot lib dir on LD_LIBRARY_PATH.
         exec.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{ "-c",
             "d=\"$HOME/.tempered\"; mkdir -p \"$d\"; cat > \"$d/main.rs\"; cd \"$d\"; " +
             "command -v rustc >/dev/null 2>&1 || { echo 'rustc not found in Termux — run:  pkg install rust' >&2; exit 127; }; " +
-            "rustc --edition 2021 main.rs -o bin 2>&1 && ./bin" });
+            "S=\"$(rustc --print sysroot)\"; " +
+            "rustc --edition 2021 -C prefer-dynamic -C debuginfo=0 main.rs -o bin 2>&1 && LD_LIBRARY_PATH=\"$S/lib:$LD_LIBRARY_PATH\" ./bin" });
         exec.putExtra("com.termux.RUN_COMMAND_STDIN", code);
         exec.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
         exec.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
