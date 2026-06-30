@@ -1,72 +1,77 @@
 # Tempered Studio — Mobile (Android)
 
-The Android surface of **Tempered Studio** — the "one seam, many surfaces"
-architecture extended to a phone. This is the separate mobile repo the main
-project's `docs/DISTRIBUTION.md` calls for (kept out of the Rust workspace so the
-Android/Gradle toolchain doesn't muddy it).
+Learn Rust on your phone, **fully offline** — 37 lessons, 71 exercises, quizzes,
+cheatsheets, a glossary, and the Rust Book, all bundled (no account, no network).
+Predict what code will do, then **compile + run it with a real native `rustc`**
+on the device itself — no server, nobody's cloud.
 
-## 📥 Download
+---
 
-**[Latest APK → Releases](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/latest)**
-(currently [v0.3.1](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/tag/v0.3.1) — the
-full offline learning platform: 37 lessons, glossary, quizzes, cheatsheets, exercises & the Book).
+## ⬇️ Install & Setup
 
-It's a **debug-signed** APK — sideloadable on any phone: enable *"install unknown
-apps"* for your browser/file manager, download, tap to install. No Play Store, no
-account, fully offline once installed. (A Play-Store / F-Droid *release* build
-needs a signing keystore — separate.) Every push to `main` also publishes a fresh
-APK as a workflow artifact via [`.github/workflows/apk.yml`](.github/workflows/apk.yml).
+### 1. Get the app
+**[⬇️ Download the latest APK](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/download/v0.3.2/TemperedStudio-v0.3.2-debug.apk)**
+&nbsp;·&nbsp; or browse **[all releases](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/latest)**
 
-## Status — v0.2 (offline study app: embedded seam, real curriculum)
+It's a **debug-signed, sideloadable** APK — no Play Store needed:
+
+1. Tap the download link above on your phone.
+2. When prompted, **allow your browser to "install unknown apps"**.
+3. Open the downloaded `.apk` → **Install**. (You'll see the Ferris-crab icon.)
+
+Everything — lessons, exercises, predicting, the Book, glossary — works **immediately, offline**, with no further setup.
+
+### 2. (Optional) Run Rust natively on the phone
+Compiling needs a Rust toolchain, which Android doesn't ship. Tempered Studio uses
+an installed **[Termux](https://f-droid.org/packages/com.termux/)** as the on-device
+compiler — real `rustc`, offline, no server. One-time setup:
+
+1. **Install Termux** from **F-Droid** (the Play-Store build is outdated): <https://f-droid.org/packages/com.termux/>
+2. Open Termux and run:
+   ```sh
+   pkg install rust
+   echo allow-external-apps=true >> ~/.termux/termux.properties
+   ```
+3. Back in Tempered Studio, press **Run** — Android will ask to grant the *"Run
+   commands in Termux"* permission once; allow it. Your code now compiles and runs
+   on-device.
+
+If Termux isn't installed, **Run** shows these same steps. (You can still learn
+fully without it — predict the outcome, read the lesson + Book, check your guess.)
+
+---
+
+## What it is
 
 A minimal Java app whose single `Activity` hosts a `WebView` running the **same
-single-file `gui/` shell** shipped on web and desktop — served, together with its
-read-only `/api/*` endpoints, from a virtual `https://` origin so `fetch()` works
-(Chromium blocks `fetch` to `file://`). The `/api/*` calls are answered **offline
-by the embedded Rust seam over JNI** (`libtempered_seam.so`), which reads a store
-seeded from the bundled `exercises/` + `book/`. So the app shows the **real
-curriculum (65 exercises across 11 phases) + 33 Rust Book chapters — with no
-network**. (Compiling the learner's code needs a toolchain Android lacks, so
-`Run`/`Check` fall through; a remote/online toolchain or a future on-device one
-is the next step.)
+single-file `gui/` shell** shipped on web and desktop. Its read-only `/api/*`
+endpoints are answered **offline by the embedded Rust seam over JNI**
+(`libtempered_seam.so`), reading a store seeded from the bundled `exercises/` +
+`book/` + `lessons/` + `glossary/` + `quizzes/` + `cheatsheets/`. So the whole
+curriculum renders with **no network**.
 
-Verified end-to-end on an Android-34 emulator: boots, the seam `.so` loads, and
-the real UI renders offline (curriculum, current exercise, book, "on-device
-seam: rust" banner).
+For **compiling/running** the learner's code, the app bridges to an installed
+Termux via its `com.termux.RUN_COMMAND` intent (see *Install & Setup* above) —
+native, on-device, offline. No code is ever sent to a server.
 
-- **Builds to a real, installable APK** — `studio.tempered.mobile`, minSdk 24,
-  targetSdk 34. No AndroidX, no Kotlin plugin, no extra deps (only the Android
-  Gradle Plugin) — deliberately minimal so it builds anywhere the toolchain is.
-- Verified: `aapt2 dump badging` resolves the package + launcher activity, and
-  `assets/gui/index.html` is bundled inside the `.apk`.
+- **`studio.tempered.mobile`** · minSdk 24 · targetSdk 34 · no AndroidX/Kotlin —
+  deliberately minimal so it builds anywhere the toolchain is.
 
 ## Build
 
 ```sh
 ./build-apk.sh
 # or, manually:
-. /tank/scratch/android-toolchain/env.sh   # JDK/SDK-34/NDK 26.3/Gradle 8.9 (+ TMPDIR off noexec /tmp)
+. /tank/scratch/android-toolchain/env.sh   # JDK / SDK-34 / NDK 26.3 / Gradle 8.9
 gradle assembleDebug --no-daemon
 # → app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`build-apk.sh` re-syncs `gui/` from a sibling `../Tempered-Studio` checkout when
-present, so the mobile UI never drifts from the web/desktop one.
-
-## Next step — embed the seam so exercises run on-device
-
-v0.1 shows the UI but can't compile/run exercises (no server). The plan: bundle
-the language seam on-device rather than a remote toolchain —
-
-1. Cross-compile a thin `rpro-mobile` cdylib (exposing the `rpro-lang` /
-   `rpro-core` seam) for the Android targets via **cargo-ndk** (already
-   installed; `aarch64`, `armv7`, `x86_64`, `i686` rust targets added).
-2. Bridge it to the WebView via a JNI / `@JavascriptInterface` shim (or run a
-   loopback `rpro-serve` thread) so `Run`/`Check`/`Explain` work offline.
-3. F-Droid + Obtainium-compatible GitHub Releases for auto-update
-   (`docs/DISTRIBUTION.md` §Android).
-
-The cross-compile toolchain is ready; this repo is the host the seam plugs into.
+`build-apk.sh` cross-compiles the `rpro-lang` seam for all ABIs (cargo-ndk) and
+re-syncs `gui/` + the full store from a sibling `../Tempered-Studio` checkout, so
+the mobile UI never drifts from the web/desktop one. Every push to `main` also
+builds an APK via [`.github/workflows/apk.yml`](.github/workflows/apk.yml);
+tagged `v*` pushes attach it to a downloadable GitHub Release.
 
 ## License
 
