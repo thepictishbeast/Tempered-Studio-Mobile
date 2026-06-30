@@ -13,11 +13,28 @@ on the device itself — no server, nobody's cloud.
 **[⬇️ Download the latest APK](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/download/v0.3.2/TemperedStudio-v0.3.2-debug.apk)**
 &nbsp;·&nbsp; or browse **[all releases](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/latest)**
 
-It's a **debug-signed, sideloadable** APK — no Play Store needed:
+It's a **debug-signed, sideloadable** APK — no Play Store needed.
 
+#### Recommended: install via Obtainium (auto-updates, no Chrome download block)
+[Obtainium](https://github.com/ImranR98/Obtainium) installs + auto-updates APKs straight from GitHub Releases — and sidesteps Chrome's "can't download .apk" block.
+
+1. In Obtainium → **Add App** → **App Source URL:**
+   ```
+   https://github.com/thepictishbeast/Tempered-Studio-Mobile
+   ```
+2. Open the app's settings and set **"Filter APKs by Regular Expression"** to:
+   ```
+   \.apk$
+   ```
+   (so it grabs `…-debug.apk` and ignores the `.apk.zip` fallback asset).
+3. Tap **Add**, then **Install** — and **Update** whenever a new version ships.
+
+#### Or sideload manually
 1. Tap the download link above on your phone.
-2. When prompted, **allow your browser to "install unknown apps"**.
-3. Open the downloaded `.apk` → **Install**. (You'll see the Ferris-crab icon.)
+2. When prompted, **allow your browser to "install unknown apps"**. *(Chrome blocks `.apk`
+   files by extension — if it refuses, download the **`.apk.zip`** asset instead and unzip it,
+   or use Obtainium / Firefox.)*
+3. Open the `.apk` → **Install**. (You'll see the Ferris-crab icon.)
 
 Everything — lessons, exercises, predicting, the Book, glossary — works **immediately, offline**, with no further setup.
 
@@ -30,7 +47,8 @@ compiler — real `rustc`, offline, no server. One-time setup:
 2. Open Termux and run:
    ```sh
    pkg install rust
-   echo allow-external-apps=true >> ~/.termux/termux.properties
+   echo "allow-external-apps=true" >> ~/.termux/termux.properties
+   termux-reload-settings    # ← required: the property is only read after a reload/restart
    ```
 3. Back in Tempered Studio, press **Run** — Android will ask to grant the *"Run
    commands in Termux"* permission once; allow it. Your code now compiles and runs
