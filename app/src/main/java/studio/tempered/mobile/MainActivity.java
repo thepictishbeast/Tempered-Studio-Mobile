@@ -2,7 +2,13 @@ package studio.tempered.mobile;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.AssetManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
@@ -38,6 +44,92 @@ public class MainActivity extends Activity {
     public final class SeamBridge {
         @JavascriptInterface public String languageId() { return Seam.languageId(); }
         @JavascriptInterface public String exerciseTemplate(String c) { return Seam.exerciseTemplate(c); }
+
+        /** Is Termux installed? (the on-device native rustc host) */
+        @JavascriptInterface public boolean termuxInstalled() {
+            try { getPackageManager().getPackageInfo("com.termux", 0); return true; }
+            catch (Exception e) { return false; }
+        }
+
+        /** Compile + run `code` natively on-device via an installed Termux (no server,
+         *  no bundled toolchain). The result is delivered asynchronously to the page's
+         *  window.__termuxResult(cbId, {stdout,stderr,errmsg,exit}). */
+        @JavascriptInterface public void runViaTermux(final String code, final String cbId) {
+            runOnUiThread(new Runnable() { public void run() { doTermuxRun(code, cbId); } });
+        }
+    }
+
+    // ── Native on-device Run via Termux's RUN_COMMAND intent ─────────────────────
+    // We hand the user's source to Termux on stdin; a tiny bash one-liner compiles
+    // it with the REAL on-device rustc and runs it, streaming compiler output back.
+    private void doTermuxRun(String code, final String cbId) {
+        final String action = getPackageName() + ".TERMUX_RESULT." + cbId;
+        final BroadcastReceiver rx = new BroadcastReceiver() {
+            @Override public void onReceive(Context c, Intent intent) {
+                String out = "", err = "", errmsg = ""; int exit = -1;
+                Bundle res = intent.getBundleExtra("result");
+                if (res != null) {
+                    out = nz(res.getString("stdout"));
+                    err = nz(res.getString("stderr"));
+                    errmsg = nz(res.getString("errmsg"));
+                    try { exit = res.getInt("exitCode", -1); }
+                    catch (Exception e) { try { exit = Integer.parseInt(nz(res.getString("exitCode"))); } catch (Exception e2) { exit = -1; } }
+                }
+                deliverTermuxResult(cbId, out, err, errmsg, exit);
+                try { c.unregisterReceiver(this); } catch (Exception e) {}
+            }
+        };
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(rx, new IntentFilter(action), Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(rx, new IntentFilter(action));
+
+        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+        PendingIntent pi = PendingIntent.getBroadcast(this, cbId.hashCode(),
+            new Intent(action).setPackage(getPackageName()), piFlags);
+
+        Intent exec = new Intent();
+        exec.setClassName("com.termux", "com.termux.app.RunCommandService");
+        exec.setAction("com.termux.RUN_COMMAND");
+        exec.putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash");
+        exec.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{ "-c",
+            "d=\"$HOME/.tempered\"; mkdir -p \"$d\"; cat > \"$d/main.rs\"; cd \"$d\"; " +
+            "command -v rustc >/dev/null 2>&1 || { echo 'rustc not found in Termux — run:  pkg install rust' >&2; exit 127; }; " +
+            "rustc --edition 2021 main.rs -o bin 2>&1 && ./bin" });
+        exec.putExtra("com.termux.RUN_COMMAND_STDIN", code);
+        exec.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        exec.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
+        exec.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", pi);
+        try {
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(exec); else startService(exec);
+        } catch (Exception e) {
+            deliverTermuxResult(cbId, "", "Couldn't reach Termux: " + e.getMessage()
+                + "\n(Install Termux + `pkg install rust`, and set allow-external-apps=true in ~/.termux/termux.properties.)", "", -1);
+            try { unregisterReceiver(rx); } catch (Exception e2) {}
+        }
+    }
+
+    private void deliverTermuxResult(String cbId, String out, String err, String errmsg, int exit) {
+        final String payload = "{\"stdout\":" + jstr(out) + ",\"stderr\":" + jstr(err)
+            + ",\"errmsg\":" + jstr(errmsg) + ",\"exit\":" + exit + "}";
+        final String js = "window.__termuxResult&&window.__termuxResult(" + jstr(cbId) + "," + payload + ")";
+        if (web != null) web.post(new Runnable() { public void run() { web.evaluateJavascript(js, null); } });
+    }
+
+    private static String nz(String s) { return s == null ? "" : s; }
+
+    private static String jstr(String s) {
+        StringBuilder b = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char ch = s.charAt(i);
+            switch (ch) {
+                case '"':  b.append("\\\""); break;
+                case '\\': b.append("\\\\"); break;
+                case '\n': b.append("\\n");  break;
+                case '\r': b.append("\\r");  break;
+                case '\t': b.append("\\t");  break;
+                default: if (ch < 0x20) b.append(String.format("\\u%04x", (int) ch)); else b.append(ch);
+            }
+        }
+        return b.append("\"").toString();
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})

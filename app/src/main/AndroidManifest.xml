@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Native on-device Run: ask an installed Termux to compile/run with its real
+         rustc (no server, no bundled toolchain). Needs the RUN_COMMAND permission +
+         package visibility (Android 11+) so we can see/target com.termux. -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+    <queries>
+        <package android:name="com.termux" />
+    </queries>
+
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
