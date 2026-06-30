@@ -8,7 +8,7 @@ Android/Gradle toolchain doesn't muddy it).
 ## 📥 Download
 
 **[Latest APK → Releases](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/latest)**
-(currently [v0.3.0](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/tag/v0.3.0) — the
+(currently [v0.3.1](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/tag/v0.3.1) — the
 full offline learning platform: 37 lessons, glossary, quizzes, cheatsheets, exercises & the Book).
 
 It's a **debug-signed** APK — sideloadable on any phone: enable *"install unknown
