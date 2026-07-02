@@ -57,7 +57,12 @@ public class MainActivity extends Activity {
          *  no bundled toolchain). The result is delivered asynchronously to the page's
          *  window.__termuxResult(cbId, {stdout,stderr,errmsg,exit}). */
         @JavascriptInterface public void runViaTermux(final String code, final String cbId) {
-            runOnUiThread(new Runnable() { public void run() { doTermuxRun(code, cbId); } });
+            runViaTermux(code, cbId, "run"); // 2-arg fallback (older gui) → full run
+        }
+        /** op: "check" → fast type-check only (rustc --emit=metadata, no codegen/link/run);
+         *  "run"/"test" → compile + run. Check is both faster and semantically correct. */
+        @JavascriptInterface public void runViaTermux(final String code, final String cbId, final String op) {
+            runOnUiThread(new Runnable() { public void run() { doTermuxRun(code, cbId, op); } });
         }
 
         /** Reliable clipboard copy (WebView's navigator.clipboard is flaky). */
@@ -79,7 +84,7 @@ public class MainActivity extends Activity {
     // ── Native on-device Run via Termux's RUN_COMMAND intent ─────────────────────
     // We hand the user's source to Termux on stdin; a tiny bash one-liner compiles
     // it with the REAL on-device rustc and runs it, streaming compiler output back.
-    private void doTermuxRun(String code, final String cbId) {
+    private void doTermuxRun(String code, final String cbId, final String op) {
         final String action = getPackageName() + ".TERMUX_RESULT." + cbId;
         final BroadcastReceiver rx = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent intent) {
@@ -107,14 +112,20 @@ public class MainActivity extends Activity {
         exec.setClassName("com.termux", "com.termux.app.RunCommandService");
         exec.setAction("com.termux.RUN_COMMAND");
         exec.putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash");
-        // Speed: -C prefer-dynamic links libstd dynamically (skips the slow static
-        // link of all of std) + -C debuginfo=0 — big win for tiny programs. The run
-        // then needs the sysroot lib dir on LD_LIBRARY_PATH.
-        exec.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{ "-c",
+        // The rustc line depends on the op:
+        //  • check → `--emit=metadata` type-checks ONLY (no codegen, no link, no run) —
+        //    the same diagnostics, markedly faster (the win Paul asked for), and the
+        //    correct semantics for Check (it never runs the binary).
+        //  • run/test → -C prefer-dynamic (dynamic libstd, skips the slow static link)
+        //    + -C debuginfo=0, then run with the sysroot lib dir on LD_LIBRARY_PATH.
+        final String prefix =
             "d=\"$HOME/.tempered\"; mkdir -p \"$d\"; cat > \"$d/main.rs\"; cd \"$d\"; " +
-            "command -v rustc >/dev/null 2>&1 || { echo 'rustc not found in Termux — run:  pkg install rust' >&2; exit 127; }; " +
-            "S=\"$(rustc --print sysroot)\"; " +
-            "rustc --edition 2021 -C prefer-dynamic -C debuginfo=0 main.rs -o bin 2>&1 && LD_LIBRARY_PATH=\"$S/lib:$LD_LIBRARY_PATH\" ./bin" });
+            "command -v rustc >/dev/null 2>&1 || { echo 'rustc not found in Termux — run:  pkg install rust' >&2; exit 127; }; ";
+        final String rustcCmd = "check".equals(op)
+            ? "rustc --edition 2021 --emit=metadata main.rs 2>&1"
+            : "S=\"$(rustc --print sysroot)\"; " +
+              "rustc --edition 2021 -C prefer-dynamic -C debuginfo=0 main.rs -o bin 2>&1 && LD_LIBRARY_PATH=\"$S/lib:$LD_LIBRARY_PATH\" ./bin";
+        exec.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{ "-c", prefix + rustcCmd });
         exec.putExtra("com.termux.RUN_COMMAND_STDIN", code);
         exec.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
         exec.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
