@@ -212,12 +212,22 @@ public class MainActivity extends Activity {
 
     private static String mime(String p) {
         if (p.endsWith(".html")) return "text/html";
+        if (p.endsWith(".mjs"))  return "text/javascript"; // pdf.js modules
         if (p.endsWith(".js"))   return "text/javascript";
         if (p.endsWith(".css"))  return "text/css";
         if (p.endsWith(".json")) return "application/json";
         if (p.endsWith(".svg"))  return "image/svg+xml";
         if (p.endsWith(".png"))  return "image/png";
+        if (p.endsWith(".gif"))  return "image/gif";
+        if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
         if (p.endsWith(".woff2"))return "font/woff2";
+        if (p.endsWith(".woff")) return "font/woff";
+        if (p.endsWith(".ttf") || p.endsWith(".otf")) return "font/ttf";
+        if (p.endsWith(".pdf"))  return "application/pdf";           // the offline library books
+        if (p.endsWith(".wasm")) return "application/wasm";         // pdf.js image decoders
+        if (p.endsWith(".bcmap"))return "application/octet-stream"; // pdf.js CJK cmaps
+        if (p.endsWith(".ftl"))  return "text/plain";              // pdf.js viewer locale
+        if (p.endsWith(".icc"))  return "application/octet-stream"; // pdf.js color profiles
         return "text/plain";
     }
 
