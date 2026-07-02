@@ -27,4 +27,12 @@ public final class Seam {
 
     /** One book chapter's cleaned markdown as /api/book?chapter=ID JSON. */
     public static native String bookChapterJson(String storeDir, String chapter);
+
+    /**
+     * The hint ladder as /api/hint JSON — the desktop ladder verbatim (attempt
+     * gate, one rung per attempt capped at 3, never the solution). `attempts`
+     * is supplied by the caller: on the phone, runs happen through the Termux
+     * bridge, so MainActivity counts them per exercise.
+     */
+    public static native String hintJson(String storeDir, int level, int attempts);
 }

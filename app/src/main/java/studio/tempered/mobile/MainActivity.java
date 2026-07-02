@@ -81,10 +81,35 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ── Attempt counting for the hint ladder ────────────────────────────────────
+    // The desktop gates hints behind genuine attempts recorded by its run handler.
+    // On the phone, runs happen through the Termux bridge below — the store's
+    // progress never sees them — so count them here, per exercise, and feed the
+    // count into the seam's hintJson (same ladder, same gate).
+    private String currentExerciseId() {
+        try {
+            return new org.json.JSONObject(Seam.currentJson(storeDir)).optString("exercise", "");
+        } catch (Exception e) { return ""; }
+    }
+
+    private int attemptsForCurrent() {
+        String id = currentExerciseId();
+        if (id.isEmpty()) return 0;
+        return getSharedPreferences("attempts", MODE_PRIVATE).getInt(id, 0);
+    }
+
+    private void recordAttemptForCurrent() {
+        String id = currentExerciseId();
+        if (id.isEmpty()) return;
+        android.content.SharedPreferences p = getSharedPreferences("attempts", MODE_PRIVATE);
+        p.edit().putInt(id, p.getInt(id, 0) + 1).apply();
+    }
+
     // ── Native on-device Run via Termux's RUN_COMMAND intent ─────────────────────
     // We hand the user's source to Termux on stdin; a tiny bash one-liner compiles
     // it with the REAL on-device rustc and runs it, streaming compiler output back.
     private void doTermuxRun(String code, final String cbId, final String op) {
+        recordAttemptForCurrent(); // every run/check/test = a genuine attempt (hint gate)
         final String action = getPackageName() + ".TERMUX_RESULT." + cbId;
         final BroadcastReceiver rx = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent intent) {
@@ -295,7 +320,15 @@ public class MainActivity extends Activity {
                         return json(mdCollection("cheatsheets", "cheatsheets", "cheatsheet", req.getUrl().getQueryParameter("id")));
                     if (path.endsWith("/api/glossary"))
                         return json(glossaryJson(req.getUrl().getQueryParameter("term")));
-                    if (path.contains("/api/")) return null; // run/select/hint/etc → gui handles offline
+                    // Hint ladder, on-device: the seam runs the desktop ladder;
+                    // attempts come from the Termux-run counter above.
+                    if (path.endsWith("/api/hint")) {
+                        int lvl = 1;
+                        try { lvl = Integer.parseInt(req.getUrl().getQueryParameter("level")); }
+                        catch (Exception e) { /* default rung 1 */ }
+                        return json(Seam.hintJson(storeDir, lvl, attemptsForCurrent()));
+                    }
+                    if (path.contains("/api/")) return null; // run/select/etc → gui handles offline
                     // Everything else = the gui/ shell, served from assets.
                     String asset = "gui" + (path.equals("/") ? "/index.html" : path);
                     InputStream in = getAssets().open(asset);
