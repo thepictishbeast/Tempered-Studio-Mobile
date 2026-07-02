@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#14161b" />
 <title>Tempered Studio</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <!--
   Tempered Studio — GUI shell (frontend).
   Self-contained, no CDN (FOSS-first, works offline). xterm.js is vendored under
@@ -15,15 +19,29 @@
   still previews. No pty — a single JSON request/response. Implements docs/UX.md.
 -->
 <link rel="stylesheet" href="vendor/xterm/xterm.css" />
+<!-- Bundled Noto Color Emoji (OFL) — local()-gated @font-face so systems WITH a
+     system emoji font never download it; fontless FOSS-desktop builds still get
+     full color emoji instead of tofu boxes. (Paul: bundle everything.) -->
+<link rel="stylesheet" href="vendor/emoji/noto-emoji.css" />
 <style>
   :root {
     --accent: #f74c00;          /* Ferris orange */
     --accent-soft: #ff7a3c;
+    /* WCAG-AA-safe background for SMALL white text: white on the bright --accent
+       (#f74c00) is only ~3.5:1 (fails AA 4.5:1 below ~18px); white on this deepened
+       orange is ~5.1:1. A fixed value (not theme-derived) so white clears AA in both
+       themes. Use this — NOT --accent — under any small `color:#fff` element. */
+    --accent-deep: #c44000;
     --done: #36c46b; --current: #2bb6d6; --locked: #6b7280;
     --skipped: #e0b020; --error: #ff5c5c; --warn: #e0b020; --note: #5aa9ff;
     --bg: #0e1116; --bg-2: #161b22; --bg-3: #1d2430; --line: #2a3340;
-    --fg: #e6edf3; --fg-dim: #9aa7b4; --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
-    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+    /* Emoji fallbacks (appended after the generic family) let the UI glyphs 📝🔮✓
+       render via whatever emoji font the OS ships — Win/Mac/Android/most Linux —
+       instead of tofu boxes. Bare-minimal Linux desktops still need a bundled
+       font (flagged to Paul); this fixes the common case for free. */
+    --emoji: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "Android Emoji", "EmojiOne Color";
+    --fg: #e6edf3; --fg-dim: #9aa7b4; --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace, var(--emoji);
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif, var(--emoji);
     --radius: 12px; --shadow: 0 6px 24px rgba(0,0,0,.35);
     /* syntax-highlight palette for rendered (read-only) Rust code blocks */
     --tok-k:#ff7a3c; --tok-s:#7ec97e; --tok-c:#6b7884; --tok-n:#d2a8ff; --tok-t:#5aa9ff; --tok-m:#e0b020;
@@ -39,7 +57,7 @@
     height:100vh; overflow:hidden; -webkit-font-smoothing:antialiased;
   }
   header {
-    display:flex; align-items:center; gap:18px; padding:10px 16px;
+    display:flex; align-items:center; gap:18px; padding:10px 16px; position:relative;
     background:linear-gradient(180deg,var(--bg-2),var(--bg)); border-bottom:1px solid var(--line);
   }
   .brand { display:flex; align-items:center; gap:9px; font-weight:700; font-size:16px; letter-spacing:.2px; }
@@ -48,19 +66,37 @@
     background:linear-gradient(135deg,var(--accent),var(--accent-soft));
     box-shadow:0 0 14px rgba(247,76,0,.5); display:grid; place-items:center; color:#fff; font-size:13px;
   }
-  nav.tabs { display:flex; gap:4px; margin-left:6px; }
+  .navwrap { display:flex; align-items:center; gap:4px; margin-left:6px; }
+  nav.tabs { display:flex; gap:4px; }
   .tab {
     padding:7px 14px; border-radius:8px; color:var(--fg-dim); cursor:pointer; font-size:13.5px;
     border:1px solid transparent; transition:all .15s ease; user-select:none; display:flex; gap:7px; align-items:center;
   }
   .tab:hover { color:var(--fg); background:var(--bg-3); }
   .tab.active { color:var(--fg); background:var(--bg-3); border-color:var(--line); box-shadow:inset 0 -2px 0 var(--accent); }
+  /* ⋯ More menu — the reference/lookup surfaces (Book, Glossary, Cheatsheets, Roadmap). */
+  .moremenu { position:relative; display:flex; }
+  .menu-trigger { background:none; font-family:inherit; line-height:normal; white-space:nowrap; gap:4px; }
+  .menu-trigger .caret { font-size:10px; opacity:.65; }
+  .menu-list {
+    position:absolute; top:calc(100% + 6px); left:0; min-width:194px; z-index:50;
+    background:var(--bg-2); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 12px 36px rgba(0,0,0,.5); padding:5px; flex-direction:column; gap:2px;
+  }
+  /* Show ONLY when not [hidden] — an author `display:flex` would override the UA `[hidden]{display:none}`. */
+  .menu-list:not([hidden]) { display:flex; }
+  .menuitem {
+    display:flex; align-items:center; gap:9px; width:100%; text-align:left; cursor:pointer;
+    background:none; border:none; color:var(--fg-dim); padding:8px 12px; border-radius:7px;
+    font-family:inherit; font-size:13.5px;
+  }
+  .menuitem:hover, .menuitem:focus { background:var(--bg-3); color:var(--fg); outline:none; }
+  .menuitem[aria-current="true"] { color:var(--fg); box-shadow:inset 2px 0 0 var(--accent); }
   .spacer { flex:1; }
   .badge {
     font-family:var(--mono); font-size:11.5px; padding:4px 9px; border-radius:999px;
     border:1px solid var(--line); color:var(--fg-dim); background:var(--bg-2);
   }
-  .badge.free { color:var(--done); border-color:rgba(54,196,107,.4); }
   .gauge { display:flex; align-items:center; gap:9px; min-width:200px; }
   .gauge .track { flex:1; height:9px; border-radius:999px; background:var(--bg-3); overflow:hidden; border:1px solid var(--line); }
   .gauge .fill { height:100%; width:0; border-radius:999px;
@@ -70,15 +106,36 @@
     border-radius:8px; padding:5px 9px; font-size:14px; transition:.15s; }
   .iconbtn:hover { color:var(--fg); border-color:var(--accent); }
 
-  main { display:grid; grid-template-columns:248px 1fr 320px; grid-template-rows:1fr; height:calc(100vh - 45px); }
-  main.focus { grid-template-columns:1fr; }
-  main.focus > .pane:first-child, main.focus > .pane:last-child { display:none; }
-  .docview { height:calc(100vh - 45px); overflow:auto; padding:22px 26px 60px; max-width:920px; margin:0 auto; }
-  .docview h1 { font-size:22px; margin:2px 0 12px; } .docview h2 { font-size:16px; margin:20px 0 8px; }
-  .docview h3 { font-size:13.5px; color:var(--fg-dim); letter-spacing:.04em; margin:14px 0 6px; }
-  .docview p { line-height:1.65; } .docview li { line-height:1.7; }
-  .docview code { background:var(--bg-3); padding:1px 5px; border-radius:5px; font-family:var(--mono); font-size:12.5px; }
-  .docview pre { background:var(--bg-3); padding:12px 14px; border-radius:8px; overflow:auto; margin:10px 0; line-height:1.55; }
+  /* The practice work area is flanked by two collapsible side panes, so the main
+     page is exactly as focused as the learner wants:
+       · left  = the exercise list (navigation) — collapse with the ◧ Focus button
+       · right = the "Insights" drawer (Diagnostics / Book refs / Tutor), hidden
+                 until opened (▦) or a Run/Hint reveals it.
+     These four tracks cover every list × insights combination. */
+  main { display:grid; grid-template-columns:248px 1fr; grid-template-rows:1fr; height:calc(100vh - 45px); }
+  /* `main { display:grid }` (author) otherwise defeats the `hidden` attribute's
+     UA `display:none`, so Book/Glossary/Roadmap rendered UNDER the practice view
+     instead of replacing it. This restores the intended view-switch. */
+  main[hidden] { display:none; }
+  main.show-insights:not(.no-list) { grid-template-columns:248px 1fr 340px; }
+  main.no-list:not(.show-insights) { grid-template-columns:1fr; }
+  main.no-list.show-insights { grid-template-columns:1fr 340px; }
+  main.no-list > .pane:first-child { display:none; }
+  main:not(.show-insights) > .pane:last-child { display:none; }
+  #insightsBtn[aria-expanded="true"], #focusBtn[aria-pressed="true"] { color:var(--fg); background:var(--bg-3); border-color:var(--line); box-shadow:inset 0 -2px 0 var(--accent); }
+  /* Reading column: a comfortable ~72ch measure (not the full 920) reads far
+     better for prose; library/logs/tables sit happily in the same width. */
+  .docview { height:calc(100vh - 45px); overflow:auto; padding:24px 30px 64px; max-width:780px; margin:0 auto; }
+  .docview h1 { font-size:25px; font-weight:700; letter-spacing:-.015em; line-height:1.2; margin:4px 0 16px; }
+  .docview h2 { font-size:17.5px; font-weight:600; line-height:1.3; margin:26px 0 9px; }
+  .docview h3 { font-size:13.5px; color:var(--fg-dim); letter-spacing:.04em; margin:18px 0 6px; }
+  .docview p { line-height:1.7; } .docview li { line-height:1.72; }
+  /* Prose rhythm for the reading surfaces (lessons / book / quizzes / glossary). */
+  .bookbody { font-size:14.6px; }
+  .bookbody p { margin:0 0 13px; }
+  .bookbody > :first-child { margin-top:0; }
+  .docview code { background:var(--bg-3); padding:1.5px 5px; border-radius:5px; font-family:var(--mono); font-size:12.5px; }
+  .docview pre { background:var(--bg-3); border:1px solid var(--line); padding:13px 15px; border-radius:9px; overflow:auto; margin:12px 0; line-height:1.55; }
   .docview pre code { background:none; padding:0; border-radius:0; font-size:12.5px; white-space:pre; }
   /* token highlighting for rendered Rust code blocks (escape-then-tokenize) */
   .docview pre code .tok-k { color:var(--tok-k); }
@@ -94,6 +151,97 @@
   .docview table { border-collapse:collapse; margin:12px 0; font-size:12.5px; display:block; overflow-x:auto; }
   .docview th, .docview td { border:1px solid var(--line); padding:5px 11px; text-align:left; }
   .docview thead th { background:var(--bg-3); font-weight:600; }
+  /* Glossary tab term cards */
+  .docview .gloss-term { border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; padding:11px 14px; margin:10px 0; }
+  .docview .gloss-name { font-size:14px; color:var(--fg); margin:0 0 5px; letter-spacing:0; text-transform:none; }
+  .docview .gloss-def { line-height:1.6; margin:0; }
+  .docview .gloss-foot { margin-top:8px; font-size:12px; color:var(--fg-dim); display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .docview .gloss-more { color:var(--note); text-decoration:none; font-weight:600; }
+  .docview .gloss-more:hover { text-decoration:underline; }
+  /* Lessons tab: the prev/next/Study-Guide nav bar lifted out of the footer */
+  .docview .lessonnav { display:flex; flex-wrap:wrap; gap:10px 18px; margin:18px 0 8px; padding-top:14px; border-top:1px solid var(--line); }
+  .docview .lessonnav a { color:var(--note); font-weight:600; text-decoration:none; }
+  .docview .lessonnav a:hover { text-decoration:underline; }
+  /* Lessons tab: the "Practice this lesson" launcher card */
+  .docview .lessonpractice { margin:20px 0 6px; padding:12px 16px; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; }
+  .docview .lessonpractice h3 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-dim); margin:0 0 8px; }
+  .docview .lessonpractice ul { margin:0; padding:0; list-style:none; }
+  .docview .lessonpractice li { padding:3px 0; font:13px var(--mono); }
+  .docview .practicelink { color:var(--accent); font-weight:600; text-decoration:none; }
+  .docview .practicelink:hover { text-decoration:underline; }
+  /* Quizzes tab: the collapsible Answers section (predict before you reveal) */
+  .docview .quizanswers { margin:20px 0; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; }
+  .docview .quizanswers > summary { cursor:pointer; padding:11px 15px; font-weight:600; color:var(--accent); user-select:none; }
+  .docview .quizanswers[open] > summary { border-bottom:1px solid var(--line); }
+  .docview .quizanswers > .bookbody { padding:4px 16px 14px; }
+  /* Per-question quiz: each question + its own inline reveal */
+  .docview .quizq { margin:0 0 22px; }
+  .docview .quizq > .bookbody { margin-bottom:6px; }
+  .docview .qa-inline { margin:6px 0 0; }
+  .docview .qa-inline > summary { padding:8px 14px; font-size:13.5px; }
+  .docview .quizprov { color:var(--fg-dim); font-size:12.5px; margin-top:18px; }
+  .docview .lessonquiz { margin:14px 0 4px; color:var(--fg-dim); }
+  /* Lessons list grouped into curriculum stages (client-side) — the shape of the
+     path + per-stage progress, mirroring the Journey. */
+  .docview .lstage { margin:0; }
+  .docview .lessonstage { display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+    font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--fg-dim);
+    margin:22px 0 6px; padding-bottom:5px; border-bottom:1px solid var(--line); }
+  .docview .stagecount { font-family:var(--mono); font-size:11px; font-weight:400; color:var(--fg-dim);
+    text-transform:none; letter-spacing:0; white-space:nowrap; }
+  .docview .stagecount.done { color:var(--done); }
+  .docview .quizlink { color:var(--accent); font-weight:600; text-decoration:none; }
+  .docview .quizlink:hover { text-decoration:underline; }
+  .docview .lessoncheat { margin:6px 0; color:var(--fg-dim); font-size:13.5px; }
+  .docview .cheatlink { color:var(--accent); font-weight:600; text-decoration:none; }
+  .docview .cheatlink:hover { text-decoration:underline; }
+  .docview .lessonbook { margin:6px 0; color:var(--fg-dim); font-size:13.5px; }
+  .docview .booklink { color:var(--accent); font-weight:600; text-decoration:none; }
+  .docview .booklink:hover { text-decoration:underline; }
+  .docview .qzdone { color:var(--done); font-weight:700; }
+  /* 📚 Learn hub */
+  .docview .hubprog { margin:0 0 14px; padding:10px 14px; border:1px solid var(--line); border-radius:10px;
+    background:var(--bg-2); color:var(--fg-dim); font-size:13.5px; }
+  .docview .hubprog b { color:var(--fg); }
+  .docview .hubgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; margin:2px 0 6px; }
+  .docview .hubcard { display:flex; align-items:center; gap:12px; padding:13px 15px; border:1px solid var(--line);
+    border-radius:12px; background:var(--bg-2); text-decoration:none; transition:.15s; }
+  .docview .hubcard:hover { border-color:var(--accent); transform:translateY(-1px); box-shadow:var(--shadow); }
+  .docview .hubicon { font-size:20px; line-height:1; }
+  .docview .hubcol { display:flex; flex-direction:column; min-width:0; }
+  .docview .hubtitle { color:var(--fg); font-weight:700; font-size:14.5px; }
+  .docview .hubsub { color:var(--fg-dim); font-size:12px; margin-top:2px; }
+  .docview .hubmin { margin:16px 0 0; }
+  .docview .hubcard-min { color:var(--fg-dim); text-decoration:none; font-size:13px; }
+  .docview .hubcard-min:hover { color:var(--accent); }
+  /* One-tap resume: jump to your first unread lesson. */
+  /* #b7410e (the darker brand orange) not var(--accent): white on the bright
+     dark-theme accent is only ~3.5:1; on #b7410e it's 5.56:1 — passes WCAG AA in
+     both themes. (The Run button dodges this axe check only via its gradient bg.) */
+  .docview .continuecta { display:inline-block; margin:6px 0 16px; padding:11px 20px; border:none;
+    border-radius:10px; background:#b7410e; color:#fff; font:600 14.5px/1.2 inherit; cursor:pointer;
+    max-width:100%; text-align:left; transition:filter .15s, transform .15s; }
+  .docview .continuecta:hover { filter:brightness(1.08); transform:translateY(-1px); }
+  .docview .allread { margin:6px 0 16px; color:var(--done); font-weight:600; }
+  /* Type-to-filter the lesson list. */
+  .docview .lessonfilter { width:100%; box-sizing:border-box; margin:0 0 14px; padding:9px 13px;
+    border:1px solid var(--line); border-radius:9px; background:var(--bg-2); color:var(--fg); font:14px inherit; }
+  .docview .lessonfilter:focus { outline:none; border-color:var(--accent); }
+  .docview .lessonfilter::placeholder { color:var(--fg-dim); }
+  .docview .lessonnomatch { color:var(--fg-dim); }
+  /* Roadmap tab: the learner's curriculum journey (a card per phase) */
+  .docview .roadintro { color:var(--fg-dim); margin:0 0 18px; max-width:70ch; }
+  .docview .roadphase { margin:0 0 14px; padding:12px 16px; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; }
+  .docview .roadphase h2 { font-size:15px; margin:0 0 8px; }
+  .docview .roadlessons { margin:0; padding-left:20px; }
+  .docview .roadlessons li { padding:2px 0; font-size:13.5px; }
+  .docview .roadlessons a { color:var(--fg); text-decoration:none; }
+  .docview .roadlessons a:hover { color:var(--accent); text-decoration:underline; }
+  .docview .roadlinks { margin:10px 0 0; font-size:13px; color:var(--fg-dim); }
+  /* Reverse cross-link: from a reference surface (cheatsheet/quiz) back into the learning flow for that phase */
+  .docview .phaseback { margin:20px 0 4px; padding-top:12px; border-top:1px solid var(--line); color:var(--fg-dim); font-size:13.5px; }
+  .docview .phaseback a { color:var(--accent); font-weight:600; text-decoration:none; }
+  .docview .phaseback a:hover { text-decoration:underline; }
   .docview .booksearch input { width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; font-family:var(--ui);
     color:var(--fg); background:var(--bg-2); border:1px solid var(--line); border-radius:8px; margin:6px 0 4px; }
   .docview .booksearch input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(247,76,0,.18); }
@@ -105,10 +253,16 @@
   .bshit-flash { background:rgba(247,76,0,.18); border-radius:4px; transition:background 1.4s ease; }
   .booktoc { list-style:none; padding:0; } .booktoc li { margin:3px 0; }
   .booktoc a { font-size:13.5px; } .booktoc small { margin-left:8px; }
-  .pane { border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+  .pane { border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0; }
   .pane:last-child { border-right:none; }
   .pane h2 { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--fg-dim);
-    margin:0; padding:12px 14px 8px; font-weight:600; }
+    margin:0; padding:12px 14px 8px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  .excount { color:var(--accent-soft); font-weight:700; letter-spacing:0; text-transform:none; }
+  .excaret { display:none; } /* only meaningful on phones (accordion) */
+  /* lesson read-tracking ✓ marks */
+  .docview .booktoc li.read a, .docview .roadlessons li.read a { color:var(--fg-dim); }
+  .docview li.read .readmark { color:var(--done); margin-right:5px; }
+  .docview .readbadge { color:var(--fg-dim); font-size:12px; font-weight:400; margin-left:8px; }
 
   .exlist { overflow:auto; padding:0 8px 12px; }
   .ex { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:9px; cursor:pointer;
@@ -123,46 +277,112 @@
      composites the text toward the background and drops it below the 4.5:1
      contrast floor (~3.5:1). --fg-dim holds ~6-7.8:1 on every panel shade. */
   .locked .t{color:var(--fg-dim)} .locked .chip{color:var(--locked)} .skipped .chip{color:var(--skipped)}
+  /* Phase-group headers in the exercise list: a quiet section label so a 60-item
+     list reads as phases (basics / ownership / ...), not one undifferentiated scroll.
+     --fg-dim stays ≥4.5:1 (see note above); aria-hidden since each item's button
+     label already names its full phase/id. */
+  .exphase { font:600 10px var(--ui); letter-spacing:.08em; text-transform:uppercase; color:var(--fg-dim);
+    padding:10px 10px 4px; margin-top:4px; border-top:1px solid var(--line);
+    display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .exphase:first-child { border-top:0; margin-top:0; }
+  .exphasecount { font-family:var(--mono); font-size:9.5px; font-weight:400; letter-spacing:0; color:var(--fg-dim); }
+  .exphasecount.done { color:var(--done); }
 
   /* Recall: the spaced-repetition queue (codes the learner met, to refresh). */
   .recall { margin:6px 8px 12px; border-top:1px solid var(--line); padding-top:9px; }
   .recall-h { margin:0 0 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-dim); }
   .recall-codes { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
   .rc { font:600 11px var(--mono); color:var(--error); background:var(--bg-3); border:1px solid var(--line);
-        border-radius:5px; padding:2px 7px; }
+        border-radius:5px; padding:2px 7px; cursor:pointer; transition:background .12s; }
+  .rc:hover { background:var(--bg-2); }
+  .rc:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
   .rc-done { font-size:12px; color:var(--done); }
   .rc-meta { font-size:11px; color:var(--fg-dim); margin-left:auto; }
 
   .center { display:flex; flex-direction:column; min-height:0; }
   .lesson { padding:16px 20px; overflow:auto; }
-  .lesson h1 { font-size:20px; margin:0 0 6px; }
-  .lesson .sub { color:var(--fg-dim); font-size:13px; margin-bottom:14px; }
+  .lesson h1 { font-size:19px; margin:0 0 4px; line-height:1.25; }
+  .lesson .sub { color:var(--fg-dim); font-size:12.5px; margin-bottom:9px; }
+  /* concept chip → tap for a glossary definition */
+  .gloss { color:var(--accent-soft); border-bottom:1px dotted var(--accent-soft); cursor:pointer; }
+  .lesson-link { color:var(--note); font-weight:600; text-decoration:none; }
+  .lesson-link:hover { text-decoration:underline; }
+  .gloss:hover, .gloss:focus-visible { color:var(--accent); border-bottom-style:solid; outline:none; }
+  .glossbox { margin:-4px 0 14px; padding:10px 13px; border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:8px; background:var(--bg-2); font-size:13px; line-height:1.5; }
+  .gl-term { font-weight:700; color:var(--fg); text-transform:capitalize; }
+  .gl-def { color:var(--fg); }
+  .gl-foot { margin-top:7px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--fg-dim); }
+  .gl-src { font-style:italic; }
+  .gl-more { color:var(--accent-soft); text-decoration:none; }
+  .gl-more:hover { text-decoration:underline; }
+  .gl-x { margin-left:auto; cursor:pointer; color:var(--fg-dim); padding:0 4px; }
+  .gl-x:hover, .gl-x:focus-visible { color:var(--fg); outline:none; }
   .lesson p { line-height:1.6; font-size:14px; color:var(--fg); }
-  .predict { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:13px; }
+  .predict { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:13px;
+    border:1px solid transparent; border-radius:12px; padding:4px; transition:all .2s ease; }
   .predict .pl { color:var(--fg-dim); }
+  /* The prediction is a gate — when unanswered, make it impossible to miss. */
+  .predict.needs-answer { border-color:var(--accent); background:rgba(247,76,0,.07);
+    padding:12px 14px; box-shadow:0 0 0 3px rgba(247,76,0,.12); animation:predictPulse 2s ease-in-out infinite; }
+  .predict.needs-answer .pl { color:var(--accent); font-weight:700; }
+  @keyframes predictPulse { 0%,100%{box-shadow:0 0 0 3px rgba(247,76,0,.10)} 50%{box-shadow:0 0 0 5px rgba(247,76,0,.22)} }
+  .predict-prose { font-size:13px; margin:2px 0 0; color:var(--fg-dim); }
+  .predict-done { margin:8px 0 2px; padding:9px 14px; border-radius:10px; font-size:13.5px; font-weight:600;
+    color:var(--done); background:rgba(126,211,33,.08); border:1px solid rgba(126,211,33,.3); }
+  /* Learn / Assist / Dev mode switcher — Learn is strict (you do the work). */
+  .modesw { display:inline-flex; border:1px solid var(--line); border-radius:7px; overflow:hidden; margin-left:10px; vertical-align:middle; }
+  .modesw button { font:600 11px var(--ui); padding:2px 9px; background:var(--bg-2); color:var(--fg-dim); border:0; border-right:1px solid var(--line); cursor:pointer; }
+  .modesw button:last-child { border-right:0; }
+  /* Selected: --accent-deep (NOT --accent) so 11px white text clears WCAG-AA 4.5:1
+     (the bright --accent only manages ~3.5:1). The token is the reusable, AA-safe
+     home for any small white-on-orange element; see its definition in :root. */
+  .modesw button.sel { background:var(--accent-deep); color:#fff; }
   .pbtn { background:var(--bg-2); color:var(--fg); border:1px solid var(--line); border-radius:8px;
     padding:5px 10px; cursor:pointer; font-size:12.5px; transition:.12s; }
   .pbtn:hover { border-color:var(--accent); }
   .pbtn.sel { border-color:var(--accent); box-shadow:inset 0 -2px 0 var(--accent); }
+  /* Semantic tint: a locked-in "passes" reads green, "fails" reads red. */
+  .pbtn[data-pred="compiles"].sel { border-color:var(--done); box-shadow:inset 0 -2px 0 var(--done); color:var(--fg); }
+  .pbtn[data-pred="fails"].sel { border-color:var(--error); box-shadow:inset 0 -2px 0 var(--error); color:var(--fg); }
   .pin { background:var(--bg-2); color:var(--fg); border:1px solid var(--line); border-radius:8px;
-    padding:5px 8px; font-family:var(--mono); font-size:12px; width:150px; outline:none; }
+    padding:5px 8px; font-family:var(--mono); font-size:12px; flex:1 1 160px; min-width:120px; outline:none; }
+  .pin:focus { border-color:var(--accent); }
   .pv { font-size:12.5px; font-weight:600; }
   .editor { margin:0 20px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-2);
     box-shadow:var(--shadow); overflow:hidden; }
   .editor .bar { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line);
     font-size:12px; color:var(--fg-dim); font-family:var(--mono); }
   .editor .dot{width:10px;height:10px;border-radius:50%}
-  .editor pre { margin:0; padding:14px 16px; font-family:var(--mono); font-size:13px; line-height:1.6; overflow:auto; }
-  .editor textarea { display:block; width:100%; margin:0; padding:14px 16px; border:none; outline:none;
-    background:var(--bg-2); color:var(--fg); font-family:var(--mono); font-size:13px; line-height:1.6;
-    resize:vertical; min-height:180px; max-height:46vh; tab-size:4; -moz-tab-size:4; }
-  .editor textarea:focus { box-shadow:inset 0 0 0 2px rgba(247,76,0,.25); }
+  .editor .editwrap { position:relative; }
+  /* Syntax-highlight overlay: a colored <pre> behind a transparent-text textarea,
+     sharing one identical box so glyphs line up. The textarea owns input/caret/
+     selection/scroll; the <pre> just paints colour and mirrors the scroll. */
+  .editor .editwrap pre, .editor .editwrap textarea {
+    margin:0; padding:14px 16px; box-sizing:border-box; border:0;
+    font-family:var(--mono); font-size:13px; line-height:1.6; tab-size:4; -moz-tab-size:4;
+    white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; }
+  .editor #editorHL { position:absolute; inset:0; overflow:hidden;
+    color:var(--fg); background:var(--bg-2); pointer-events:none; z-index:0; }
+  .editor .editwrap textarea { display:block; width:100%; position:relative; z-index:1; outline:none;
+    background:transparent; color:transparent; caret-color:var(--fg); -webkit-text-fill-color:transparent;
+    resize:vertical; min-height:300px; max-height:60vh; }
+  .editor .editwrap textarea:focus { box-shadow:inset 0 0 0 2px rgba(247,76,0,.25); }
   .kw{color:var(--accent-soft)} .fn{color:var(--note)} .str{color:var(--done)} .cm{color:var(--fg-dim);font-style:italic}
   .runrow{display:flex;gap:10px;align-items:center;margin:0 20px 12px}
   .run{background:linear-gradient(135deg,var(--accent),var(--accent-soft));color:#fff;border:none;
     padding:9px 16px;border-radius:9px;font-weight:600;cursor:pointer;font-size:13px;box-shadow:0 4px 14px rgba(247,76,0,.35);transition:.15s}
   .run:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(247,76,0,.5)}
-  .ghost{background:var(--bg-2);color:var(--fg);border:1px solid var(--line);padding:9px 14px;border-radius:9px;cursor:pointer;font-size:13px}
+  .run.cta{animation:runReady 1.4s ease-in-out infinite}
+  @keyframes runReady{0%,100%{box-shadow:0 4px 14px rgba(247,76,0,.35)}50%{box-shadow:0 4px 22px rgba(247,76,0,.7)}}
+  /* gated (Learn, no prediction yet): clearly not pressable yet */
+  .run.gated,.ghost.gated{opacity:.4;cursor:not-allowed;filter:grayscale(.4);box-shadow:none;transform:none}
+  .run.gated:hover,.ghost.gated:hover{transform:none;box-shadow:none}
+  .ghost{background:var(--bg-2);color:var(--fg);border:1px solid var(--line);padding:9px 14px;border-radius:9px;cursor:pointer;font-size:13px;transition:border-color .15s,background .15s,transform .12s}
+  .ghost:hover:not(.gated){border-color:var(--accent);background:var(--bg-3);transform:translateY(-1px)}
+  /* tactile press + keyboard focus rings across the IDE controls */
+  .run:active:not(.gated),.ghost:active:not(.gated){transform:translateY(0)}
+  .run:focus-visible,.ghost:focus-visible,.pbtn:focus-visible,.iconbtn:focus-visible,.modesw button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   /* embedded terminal — a real xterm.js widget */
   .terminal { margin:0 20px 18px; border:1px solid var(--line); border-radius:var(--radius); background:#0a0d12;
@@ -172,14 +392,52 @@
   .xterm-host{flex:1;min-height:0;padding:6px 8px}
   .xterm-host .xterm,.xterm-host .xterm-viewport{height:100%!important;background:transparent!important}
   .throbber{color:var(--accent-soft);display:inline-block}
+  .termcopy{background:var(--bg-3);color:var(--fg-dim);border:1px solid var(--line);border-radius:7px;
+    padding:4px 10px;font:600 11.5px var(--mono);cursor:pointer}
+  .termcopy:hover{color:var(--fg);border-color:var(--accent)}
+  /* toast (copy confirmation) */
+  #toast{position:fixed;left:50%;bottom:54px;transform:translateX(-50%) translateY(8px);z-index:80;
+    background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 16px;
+    font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  /* 🩺 Logs view */
+  .docview .logbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
+  .docview .logtabs{display:flex;gap:5px;flex-wrap:wrap}
+  .docview .logtab{background:var(--bg-2);color:var(--fg-dim);border:1px solid var(--line);border-radius:8px;
+    padding:6px 11px;font-size:12.5px;cursor:pointer}
+  .docview .logtab.on{color:var(--fg);border-color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+  .docview .logtab .logn{opacity:.6;font-size:11px}
+  .docview .logbtn{background:var(--bg-2);color:var(--accent);border:1px solid var(--line);border-radius:8px;
+    padding:6px 12px;font:600 12.5px var(--ui);cursor:pointer}
+  .docview .logbtn:hover{border-color:var(--accent)}
+  .docview .logwrap{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .docview .logrow{display:grid;grid-template-columns:64px 92px 1fr;gap:8px;padding:8px 12px;
+    border-bottom:1px solid var(--line);font:12px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word}
+  .docview .logrow:last-child{border-bottom:none}
+  .docview .logrow.lv-error{background:rgba(247,76,0,.06)}
+  .docview .logt{color:var(--fg-dim)}.docview .logcat{color:var(--accent-soft)}
+  .docview .logrow.lv-error .logmsg{color:var(--fg)}
+  /* 📚 Library */
+  .docview .liblist-ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+  .docview .libopen{display:block;padding:14px 16px;border:1px solid var(--line);border-radius:12px;
+    background:var(--bg-2);text-decoration:none;transition:.15s}
+  .docview .libopen:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:var(--shadow)}
+  .docview .libttl{display:block;color:var(--fg);font-weight:700;font-size:15px}
+  .docview .libblurb{display:block;color:var(--fg-dim);font-size:13px;margin-top:3px}
+  .docview .liblic{display:block;color:var(--accent-soft);font-size:11.5px;margin-top:5px;font-family:var(--mono)}
+  .docview .pdfframe{width:100%;height:82vh;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .docview .libback{margin:0 0 10px}
+  .docview .libback a{color:var(--accent);text-decoration:none;font-weight:600}
 
   .diag { display:flex; align-items:flex-start; gap:9px; padding:10px 14px; border-bottom:1px solid var(--line); font-size:12.5px; }
   .diag .lvl{font-family:var(--mono);font-weight:700}
   .diag.error .lvl{color:var(--error)} .diag.warn .lvl{color:var(--warn)} .diag.note .lvl{color:var(--note)}
   .diag .msg small{display:block;color:var(--fg-dim);font-family:var(--mono);font-size:11px;margin-top:2px}
-  .diag[data-code]{cursor:pointer;transition:background .12s}
-  .diag[data-code]:hover{background:var(--bg-2)}
-  .diag[data-code]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  /* the code (→ Explain) and the line number (→ jump the editor caret) are
+     sibling buttons inside a plain row — no nested interactive roles. */
+  .diag .diagcode,.diag .jumpline{cursor:pointer;border-radius:3px;border-bottom:1px dotted currentColor;transition:background .12s}
+  .diag .diagcode:hover,.diag .jumpline:hover{background:var(--bg-2)}
+  .diag .diagcode:focus-visible,.diag .jumpline:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   .bref{padding:10px 14px;font-size:12.5px;border-bottom:1px solid var(--line);cursor:pointer;transition:.12s}
   .bref:hover{background:var(--bg-2)} .bref .c{font-family:var(--mono);color:var(--note)} .bref small{display:block;color:var(--fg-dim);margin-top:2px}
 
@@ -193,6 +451,16 @@
   .footer{position:fixed;bottom:0;left:0;right:0;display:flex;gap:18px;justify-content:center;
     padding:6px;background:var(--bg-2);border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--fg-dim)}
   .footer b{color:var(--fg)}
+  .keyshelp { position:fixed; inset:0; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:60; }
+  /* Show ONLY when not [hidden]. An author `display:flex` overrides the UA `[hidden]{display:none}` regardless of specificity, which would leave this full-viewport overlay always painted and swallowing every click. */
+  .keyshelp:not([hidden]) { display:flex; }
+  .keyshelp-card { background:var(--bg-2); border:1px solid var(--line); border-radius:12px; padding:20px 24px; max-width:600px; width:90%; box-shadow:0 12px 44px rgba(0,0,0,.55); }
+  .keyshelp-card h2 { margin:0 0 14px; font-size:16px; }
+  .keyshelp-grid { display:flex; gap:28px; flex-wrap:wrap; }
+  .keyshelp-grid h3 { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-dim); margin:0 0 8px; }
+  .keyshelp-grid p { margin:5px 0; font-size:13px; }
+  .keyshelp kbd { display:inline-block; min-width:16px; text-align:center; background:var(--bg-3); border:1px solid var(--line); border-radius:5px; padding:1px 6px; font:600 12px var(--mono); margin-right:8px; color:var(--fg); }
+  .keyshelp-foot { margin:16px 0 0; color:var(--fg-dim); font-size:12px; }
   .scroll::-webkit-scrollbar{width:9px}.scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
 
   /* Phone-first reflow: the locked learner profile is mobile-first. Below ~760px
@@ -200,9 +468,24 @@
   @media (max-width: 760px) {
     body { height:auto; overflow-y:auto; overflow-x:hidden; }
     header { flex-wrap:wrap; gap:8px 12px; padding:8px 10px; }
-    nav.tabs { order:5; width:100%; overflow-x:auto; }
-    .gauge { min-width:120px; }
-    main { grid-template-columns:1fr; grid-template-rows:none; height:auto; width:100%; overflow-x:hidden; }
+    /* 3 tabs + the ⋯ More menu fit a phone row now, so wrap instead of
+       horizontal-scroll (scrolling also clips the dropdown via overflow). */
+    .navwrap { order:5; width:100%; flex-wrap:wrap; margin-left:0; }
+    /* The inline progress bar is a useless ~15px sliver in the cramped phone
+       header (the % text eats the width). Promote it to a full-width 3px progress
+       line pinned along the header's bottom edge — visible + a nice progress cue —
+       and keep just the % text inline. */
+    .gauge { min-width:0; gap:0; }
+    .gauge .track { position:absolute; left:0; right:0; bottom:0; width:auto; height:3px;
+      border:0; border-radius:0; background:transparent; }
+    .gauge .fill { border-radius:0; }
+    .gauge .pct { min-width:0; }
+    /* Force a single stacked column on phones — `!important` so it beats the
+       higher-specificity desktop toggle rules (main.show-insights / main.no-list),
+       which would otherwise keep multi-column grids wider than the viewport and
+       squish the practice text to one character per line. Toggled-away panes stay
+       hidden (their display:none rules are unaffected); shown panes just stack. */
+    main { grid-template-columns:1fr !important; grid-template-rows:none; height:auto; width:100%; overflow-x:hidden; }
     /* let the single column shrink to the viewport (grid 1fr floors at child
        min-content without this) and keep child content from forcing width */
     .pane { min-width:0; border-right:none; border-bottom:1px solid var(--line); }
@@ -210,27 +493,77 @@
     .editor pre, .editor textarea, .xterm-host { max-width:100%; }
     .pane:last-child { border-bottom:none; }
     .exlist { max-height:34vh; }
-    .editor textarea { max-height:38vh; }
+    .editor textarea { min-height:220px; max-height:60vh; }
     .terminal { height:200px; }
-    .footer { position:static; flex-wrap:wrap; gap:10px 16px; }
+    /* Keyboard-shortcut bar is meaningless on touch — pure noise on a phone. */
+    .footer { display:none; }
+    /* Progressive disclosure: the 71-item exercise list collapses to one tappable
+       header row (with your progress) so the exercise itself comes first. */
+    /* Focus mode (no-list) is a DESKTOP layout toggle — if it persisted from a
+       desktop session it must not delete the exercise pane on a phone, where the
+       accordion below is the collapse mechanism. */
+    main.no-list > .pane:first-child { display:flex; }
+    main > .pane:first-child h2 { cursor:pointer; }
+    main > .pane:first-child:not(.open) .exlist,
+    main > .pane:first-child:not(.open) .recall { display:none !important; }
+    .excaret { display:inline-block; margin-left:auto; transition:transform .2s ease; }
+    main > .pane:first-child.open .excaret { transform:rotate(180deg); }
+    /* The terminal folds to its title bar until there's real output. */
+    .terminal.tcollapsed { height:auto; }
+    .terminal.tcollapsed .xterm-host { display:none; }
+
+    /* ── Phone polish (Paul 2026-06-30: beautiful · simple · intuitive · capable) ── */
+    .center { padding-bottom:6px; }
+    .lesson { padding:16px 16px 4px; }
+    h1#lessonTitle { font-size:20px; line-height:1.25; }
+    .editor, .runrow { margin-left:14px; margin-right:14px; }
+    /* Editor header: the Learn/Assist/Dev switcher was clipped to "Lea" and the
+       "read & edit, then Run" label crammed the reset. Wrap cleanly: file + reset
+       on row 1, a full-width segmented mode switcher on row 2, drop the noisy label. */
+    .editor .bar { flex-wrap:wrap; padding:8px 10px; row-gap:0; }
+    .editor .bar #editstate { display:none; }
+    .editor .bar > span[style*="flex:1"] { display:none; }
+    .editor .bar #resetbtn { margin-left:auto !important; }
+    .editor .bar .modesw { order:9; flex-basis:100%; width:100%; margin:9px 0 1px; display:flex; }
+    .editor .bar .modesw button { flex:1; padding:9px 0; font-size:13px; }
+    /* Prediction: the "error code?" input was clipped — give it its own full row. */
+    .predict { gap:8px 10px; }
+    .predict .pin { flex-basis:100%; width:100%; }
+    /* Touch-friendly actions + chips */
+    .runrow { flex-wrap:wrap; gap:8px; }
+    .runrow > button { padding:11px 16px; font-size:14px; border-radius:10px; }
+    .pbtn { padding:9px 14px; font-size:13px; }
+    .tab { padding:9px 14px; }
+    .iconbtn { width:40px; height:40px; }
+    /* A touch of breathing room between stacked panes. */
+    .pane { padding-bottom:2px; }
   }
 </style>
 </head>
 <body>
   <header>
     <div class="brand"><span class="mark">◆</span> Tempered&nbsp;Studio</div>
-    <nav class="tabs">
-      <div class="tab active" data-view="dashboard">📊 Dashboard</div>
-      <div class="tab" data-view="exercise">📝 Exercise</div>
-      <div class="tab" data-view="book">📖 Book</div>
-      <div class="tab" data-view="roadmap">🗒️ Roadmap</div>
-    </nav>
+    <!-- Active-learning surfaces stay as primary tabs (where you DO the work);
+         reference/lookup surfaces fold into the ⋯ More menu (Paul, 2026-06-25:
+         "tabs and a menu bar … things the user isn't working on shouldn't be on
+         the main page … focus on teaching and practicing rust"). -->
+    <!-- IDE-first (Paul 2026-07-02): just two tabs — the task/IDE, and one "Learn"
+         hub for ALL learning materials + progress, so nothing but the editor
+         competes for the main screen. -->
+    <div class="navwrap">
+      <nav class="tabs">
+        <div class="tab active" data-view="practice" role="tab" aria-selected="true">📝 Practice</div>
+        <div class="tab" data-view="learn" role="tab" aria-selected="false">📚 Learn</div>
+      </nav>
+    </div>
+    </div>
     <div class="spacer"></div>
-    <span class="badge free">⠿ FREE</span>
     <div class="gauge" title="Skipped never fills the bar">
       <div class="track"><div class="fill" id="fill"></div></div>
       <span class="pct" id="pct">12 / 40 · 30%</span>
     </div>
+    <button class="iconbtn" id="focusBtn" title="Focus mode — hide the exercise list for more room" aria-label="Toggle focus mode (hide the exercise list)" aria-pressed="false">◧</button>
+    <button class="iconbtn" id="insightsBtn" title="Show/hide Insights (diagnostics, book refs &amp; tutor)" aria-label="Toggle the Insights panel" aria-expanded="false">▦</button>
     <button class="iconbtn" id="theme" title="Toggle dark/light">🌓</button>
   </header>
 
@@ -250,16 +583,18 @@
       <div class="lesson scroll">
         <h1 id="lessonTitle">Tempered Studio</h1>
         <div class="sub" id="lessonSub">loading the current exercise…</div>
-        <p><b>Predict first:</b> will this compile? If not, which <b>error code</b> appears,
-        and what one-word <code>help:</code> fix will the compiler suggest? Lock your guess,
-        then press <b>Run</b> — you'll read the <i>real</i> compiler output, by hand.</p>
+        <div class="glossbox" id="glossbox" hidden aria-live="polite"></div>
+        <p id="predictProse" class="predict-prose"><b>Predict first</b> — will it <b>pass</b>, or <b>fail</b> with a compile <b>error code</b> or a runtime <b>panic</b>? Lock your guess, then <b>Run</b>.</p>
         <div class="predict" id="predictbar">
-          <span class="pl">🔮 Lock your prediction:</span>
-          <button class="pbtn" data-pred="compiles">compiles ✓</button>
+          <span class="pl">🔮 Your prediction:</span>
+          <!-- data-pred "compiles" = predicts SUCCESS (compiles AND runs clean); the
+               label says "passes" since some exercises compile but panic at run time. -->
+          <button class="pbtn" data-pred="compiles">passes ✓</button>
           <button class="pbtn" data-pred="fails">fails ✗</button>
-          <input id="predcode" class="pin" placeholder="error code? e.g. E0382" spellcheck="false" autocomplete="off" />
+          <input id="predcode" class="pin" placeholder="error code? (blank if it passes or panics)" spellcheck="false" autocomplete="off" />
           <span id="predverdict" class="pv"></span>
         </div>
+        <div id="predictDone" class="predict-done" hidden></div>
       </div>
 
       <div class="editor">
@@ -267,13 +602,21 @@
           <span class="dot" style="background:var(--warn)"></span>
           <span class="dot" style="background:var(--done)"></span>
           &nbsp; <span id="editorBar">main.rs</span>
+          <span class="modesw" id="modesw" role="group" aria-label="Editor mode">
+            <button data-mode="learn" title="Learn: you do the work — predict before Run, read errors by hand, no autocomplete/auto-fix">Learn</button>
+            <button data-mode="assist" title="Assist: parsed diagnostics — click a code to explain it, click L# to jump there — plus hints on demand">Assist</button>
+            <button data-mode="dev" title="Dev: editor assists — Tab/Shift+Tab indent, Enter auto-indents, brackets auto-close (rust-analyzer later)">Dev</button>
+          </span>
           <span style="flex:1"></span>
           <span id="editstate" style="color:var(--fg-dim)">read &amp; edit, then Run</span>
           <span id="resetbtn" title="Restore the original starter code" style="cursor:pointer;color:var(--accent-soft);margin-left:12px">↺ reset</span></div>
-        <textarea id="editorCode" class="scroll" aria-label="Source code editor for the current exercise" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off">// loading the current exercise…</textarea>
+        <div class="editwrap">
+          <pre id="editorHL" aria-hidden="true"></pre>
+          <textarea id="editorCode" class="scroll" aria-label="Source code editor for the current exercise" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off">// loading the current exercise…</textarea>
+        </div>
       </div>
       <div class="runrow">
-        <button class="run" id="runbtn">▷ Run</button>
+        <button class="run" id="runbtn" title="Run (Ctrl/Cmd+Enter from the editor)">▷ Run</button>
         <button class="ghost" id="checkbtn">✓ Check</button>
         <button class="ghost" id="explainbtn">? Explain</button>
         <button class="ghost" id="hintbtn">💡 Hint</button>
@@ -281,7 +624,7 @@
       </div>
 
       <div class="terminal">
-        <div class="tbar"><span class="throbber" id="throb">⠹</span> rpro · embedded terminal — live output from the local server (/api/run)</div>
+        <div class="tbar"><span class="throbber" id="throb">⠹</span> <span class="tbar-lbl">rpro · output</span><span style="flex:1"></span><button class="termcopy" id="termcopy" title="Copy the output (e.g. to share an error)">⧉ copy</button></div>
         <div id="xterm" class="xterm-host"></div>
       </div>
     </section>
@@ -295,15 +638,30 @@
       <h2>Book refs for this exercise</h2>
       <div id="brefs"></div>
       <h2>Tutor</h2>
-      <div class="bref" style="cursor:default">💡 What did your prediction say, and what does the <code>--&gt;</code> line point at?
-        <small>(I guide — I never type your fix. Press <b>Hint</b> to climb the ladder.)</small></div>
+      <div id="tutorbox" class="bref" style="cursor:default"></div>
       <div id="hintbox"></div>
     </section>
   </main>
 
   <section class="docview scroll" id="docview" hidden></section>
 
-  <div class="footer"><span><b>r</b> run</span><span><b>c</b> check</span><span><b>h</b> hint</span><span><b>b</b> book</span><span><b>t</b> tasks</span><span><b>?</b> keys</span><span><b>q</b> quit</span></div>
+  <div class="footer"><span><b>r</b> run</span><span><b>c</b> check</span><span><b>h</b> hint</span><span><b>l</b> lessons</span><span><b>b</b> book</span><span><b>?</b> keys</span></div>
+
+  <!-- Keyboard shortcuts overlay, toggled with `?` (Esc / backdrop to close). -->
+  <div class="keyshelp" id="keyshelp" hidden role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+    <div class="keyshelp-card">
+      <h2>Keyboard shortcuts</h2>
+      <div class="keyshelp-grid">
+        <div><h3>Do</h3>
+          <p><kbd>r</kbd> Run</p><p><kbd>c</kbd> Check</p><p><kbd>h</kbd> Hint</p></div>
+        <div><h3>Go to</h3>
+          <p><kbd>p</kbd> Practice</p><p><kbd>l</kbd> Lessons</p><p><kbd>z</kbd> Quizzes</p><p><kbd>s</kbd> Cheatsheets</p><p><kbd>b</kbd> Book</p><p><kbd>g</kbd> Glossary</p><p><kbd>t</kbd> Roadmap</p></div>
+        <div><h3>Layout</h3>
+          <p><kbd>f</kbd> Focus (hide list)</p><p><kbd>i</kbd> Insights drawer</p><p><kbd>?</kbd> This help</p></div>
+      </div>
+      <p class="keyshelp-foot">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close. (Shortcuts pause while you're typing in the editor.)</p>
+    </div>
+  </div>
 
   <script src="vendor/xterm/xterm.js"></script>
   <script src="vendor/xterm/addon-fit.js"></script>
@@ -345,12 +703,161 @@
 
     const statusEl = () => document.getElementById('statusline');
 
+    // ── Diagnostics: categorized in-app logs + copy helpers ──────────────────
+    // Paul (2026-06-30): "know every error … separate logs so you don't drown in
+    // noise and can check the relevant ones." Every error (compiler/run, app/device,
+    // ui/script, net/api) lands here — readable + COPYABLE in the 🩺 Logs view.
+    const LOGS = [];
+    const LOG_CATS = { run: 'Run / compiler', app: 'App / device', ui: 'UI / script', net: 'Network / API' };
+    let curView = 'practice', logFilter = 'all';
+    function logEvent(cat, level, msg) {
+      const e = { t: new Date().toISOString().replace('T', ' ').slice(0, 19), cat, level, msg: String(msg == null ? '' : msg) };
+      LOGS.push(e); if (LOGS.length > 600) LOGS.shift();
+      try { if (window.AndroidSeam && AndroidSeam.log) AndroidSeam.log(cat + '/' + level, e.msg); } catch (_) {}
+      if (curView === 'logs') { try { renderLogs(logFilter); } catch (_) {} }
+    }
+    window.__log = logEvent; // the Android bridge pipes native/Termux errors here too
+    window.addEventListener('error', ev => logEvent('ui', 'error',
+      (ev.message || 'script error') + (ev.filename ? '  @ ' + String(ev.filename).replace(/.*\//, '') + ':' + ev.lineno : '')));
+    window.addEventListener('unhandledrejection', ev =>
+      logEvent('ui', 'error', 'unhandled promise: ' + ((ev.reason && (ev.reason.stack || ev.reason.message)) || ev.reason)));
+
+    function toast(msg) {
+      let t = document.getElementById('toast');
+      if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1400);
+    }
+    async function copyText(s) {
+      s = s == null ? '' : String(s);
+      try { await navigator.clipboard.writeText(s); toast('copied ✓'); return; } catch (_) {}
+      try { if (window.AndroidSeam && AndroidSeam.copyText) { AndroidSeam.copyText(s); toast('copied ✓'); return; } } catch (_) {}
+      try { const ta = document.createElement('textarea'); ta.value = s; ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); ta.remove(); toast('copied ✓'); return; } catch (_) {}
+      toast('copy failed');
+    }
+    function termText() { // the terminal's text (visible + scrollback), for Copy
+      try { const b = term.buffer.active, out = [];
+        for (let i = 0; i < b.length; i++) { const ln = b.getLine(i); if (ln) out.push(ln.translateToString(true)); }
+        return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
+      } catch (_) { return ''; }
+    }
+    function renderLogs(filter) {
+      logFilter = filter || logFilter || 'all';
+      const d = document.getElementById('docview');
+      const tabs = ['all'].concat(Object.keys(LOG_CATS)).map(c => {
+        const n = c === 'all' ? LOGS.length : LOGS.filter(e => e.cat === c).length;
+        return `<button class="logtab${c === logFilter ? ' on' : ''}" data-f="${c}">${esc(c === 'all' ? 'All' : LOG_CATS[c])} <span class="logn">${n}</span></button>`;
+      }).join('');
+      const rows = LOGS.filter(e => logFilter === 'all' || e.cat === logFilter).slice().reverse();
+      const body = rows.length ? rows.map(e =>
+        `<div class="logrow lv-${esc(e.level)}"><span class="logt">${esc(e.t)}</span><span class="logcat">${esc(e.cat)}</span><span class="logmsg">${esc(e.msg)}</span></div>`).join('')
+        : '<p style="color:var(--fg-dim)">Nothing here yet. Errors — compiler · device · UI · network — show up the moment they happen.</p>';
+      const dump = rows.map(e => `[${e.t}] ${e.cat}/${e.level}  ${e.msg}`).join('\n');
+      d.innerHTML = '<h1>🩺 Logs</h1>'
+        + '<p style="color:var(--fg-dim)">Every error, grouped so you can read just the relevant ones — then ⧉ Copy to share it.</p>'
+        + '<div class="logbar"><div class="logtabs">' + tabs + '</div>'
+        + '<span style="flex:1"></span><button class="logbtn" id="logcopy">⧉ Copy</button><button class="logbtn" id="logclear">Clear</button></div>'
+        + '<div class="logwrap">' + body + '</div>';
+      d.querySelectorAll('.logtab').forEach(b => b.onclick = () => renderLogs(b.dataset.f));
+      document.getElementById('logcopy').onclick = () => copyText(dump || '(no entries)');
+      document.getElementById('logclear').onclick = () => { LOGS.length = 0; renderLogs(logFilter); };
+      d.scrollTop = 0;
+    }
+
+    // ── 📚 Library: the original FOSS Rust books, bundled + read fully OFFLINE ──
+    // (Paul 2026-06-30: "list all the textbooks unaltered in their original PDFs
+    // so they can be viewed offline.") Rendered via the vendored pdf.js viewer —
+    // WebView can't display a PDF inline, and pdf.js works with zero network.
+    let _libCache = null;
+    async function renderLibrary(file, page) {
+      const d = document.getElementById('docview');
+      if (file) { // open one book full-screen in the offline pdf.js viewer.
+        // Full-page navigation (NOT an iframe): the server's global CSP sets
+        // frame-ancestors 'none' + X-Frame-Options DENY (kept for security), which
+        // blocks embedding — but top-level nav is fine. Device/browser Back returns.
+        // A page (#page=N) deep-links straight to the phase's chapter.
+        const frag = page ? '#page=' + encodeURIComponent(page) : '';
+        location.href = 'vendor/pdfjs/web/viewer.html?file=' + encodeURIComponent('/library/' + file) + frag;
+        return;
+      }
+      d.innerHTML = '<h1>📚 Library</h1><p style="color:var(--fg-dim)">loading…</p>';
+      if (!_libCache) { try { _libCache = await fetch('library/manifest.json').then(r => r.json()); } catch (_) { _libCache = { books: [] }; } }
+      const books = (_libCache && _libCache.books) || [];
+      d.innerHTML = '<h1>📚 Library</h1>'
+        + `<p style="color:var(--fg-dim)">The original Rust books, bundled unaltered and readable <b>fully offline</b> — ${books.length} titles. No network, no account.</p>`
+        + (books.length
+          ? '<ul class="liblist-ul">' + books.map(b =>
+              `<li><a href="#" class="libopen" data-file="${esc(b.file)}"><span class="libttl">${esc(b.title)}</span>`
+              + `<small class="libblurb">${esc(b.blurb || '')}</small>`
+              + `<small class="liblic">${esc(b.license)} · ${esc(b.source)}</small></a></li>`).join('') + '</ul>'
+          : '<p>No books bundled. (Run the server / install the app with the library.)</p>');
+      d.querySelectorAll('.libopen').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('library', a.dataset.file); });
+      d.scrollTop = 0;
+    }
+
+    // ── Native on-device Run result (from the Android Termux bridge) ──
+    // MainActivity.runViaTermux() compiles+runs the code with the phone's real
+    // rustc (via an installed Termux) and calls this back asynchronously.
+    let termuxPending = null;
+    let termuxOp = 'run'; // which op fired the pending Termux call (run/check/test)
+    window.__termuxResult = function (cbId, res) {
+      if (cbId !== termuxPending) return; // ignore stale/duplicate
+      termuxPending = null;
+      res = res || {};
+      expandTerminal();
+      term.clear();
+      const text = (res.stdout || '') + (res.stderr || '');
+      if (text) term.write(text.replace(/\n/g, '\r\n'));
+      if (res.errmsg) term.writeln('\r\n' + d(res.errmsg));
+      const passed = res.exit === 0;
+      const blob = (text + ' ' + (res.errmsg || '')).toLowerCase();
+      // Surface the #1 setup gotcha with the exact one-time fix.
+      if (blob.includes('allow-external-apps')) {
+        term.writeln(''); term.writeln(r('Termux needs one more setting') + d(' — run these in Termux, then press Run again:'));
+        term.writeln('  ' + g('echo "allow-external-apps=true" >> ~/.termux/termux.properties'));
+        term.writeln('  ' + g('termux-reload-settings'));
+        logEvent('app', 'error', 'Termux allow-external-apps not enabled — needs the two setup lines + termux-reload-settings.');
+      } else {
+        logEvent('run', passed ? 'info' : 'error',
+          passed ? 'on-device run OK' : 'on-device run failed (exit ' + res.exit + ')\n' + text + (res.errmsg ? '\n' + res.errmsg : ''));
+      }
+      term.writeln('');
+      // Check type-checks only (no run) — reflect that in the verdict, not "ran".
+      const okMsg = termuxOp === 'check' ? '✓ type-checks — no errors' : '✓ compiled & ran on-device';
+      term.writeln(passed ? g(okMsg) + d(' — native rustc via Termux')
+                          : r('✗ exit ' + res.exit) + d(' — read the output above; tap ⧉ copy to share it'));
+      statusEl().textContent = passed ? (termuxOp === 'check' ? 'type-checks ✓' : 'ran on-device ✓') : 'failed (on-device)';
+      try { setInsights(true); } catch (_) {}
+      renderTutor(passed, ''); // Termux output is raw (no parsed code) → by-hand phrasing
+      if (mode === 'learn') { // re-arm the predict gate, like the server path
+        predict = { compiles: null, code: '' };
+        document.querySelectorAll('.pbtn').forEach(x => x.classList.remove('sel'));
+        const pc = document.getElementById('predcode'); if (pc) pc.value = '';
+        updateRunGate();
+      }
+    };
+
     // Live path: POST a whitelisted op to the local server and stream the raw
     // output (already ANSI-colored by the toolchain) into the xterm terminal.
     async function runOp(op, extra) {
+      // Learn mode = active-recall gate: you must LOCK a compiles/fails prediction
+      // before Run/Check will reveal the real output. (Assist/Dev: no gate.)
+      if (mode === 'learn' && (op === 'run' || op === 'check') && predict.compiles === null) {
+        const pb = document.getElementById('predictbar');
+        if (pb) { pb.style.outline = '2px solid var(--accent)'; setTimeout(() => pb.style.outline = '', 1200); }
+        statusEl().textContent = '🔒 predict first';
+        term.clear();
+        term.writeln(d('Learn mode: lock your prediction first — will it pass (compile AND run cleanly), or fail? '));
+        term.writeln(d('Pick passes ✓ / fails ✗ (and an error-code guess, if any), THEN press Run.'));
+        term.writeln(d('Predicting before you run is the active-recall step — that\'s the point.'));
+        return;
+      }
       const btns = ['runbtn','checkbtn','explainbtn'].map(id=>document.getElementById(id));
       btns.forEach(x=>x && (x.disabled=true));
       statusEl().textContent = op + '…';
+      expandTerminal(); // output is coming — unfold the phone's collapsed terminal
       term.clear();
       term.writeln(d('$ ' + op + ' — running on the local server…'));
       try {
@@ -369,6 +876,7 @@
           return;
         }
         const out = await res.json();
+        lastOut = out; // remember for tier re-render (see setMode)
         term.clear();
         // Raw bytes carry ANSI from the toolchain — write verbatim, no recolor.
         if (out.raw_stdout) term.write(out.raw_stdout.replace(/\n/g,'\r\n'));
@@ -377,8 +885,17 @@
           ? g('✓ passed') + d(' in ' + out.duration_ms + 'ms')
           : r('✗ failed') + d(' in ' + out.duration_ms + 'ms — read it top-to-bottom, then fix & re-run');
         term.writeln(''); term.writeln(verdict);
-        renderDiag(out);
-        if (op !== 'explain') showPrediction(out);
+        renderDiag(out); // sets lastCode (Assist/Dev only; '' in Learn — by-hand)
+        setInsights(true); // a result exists now — surface the Insights drawer
+        if (op !== 'explain') { showPrediction(out); renderTutor(out.passed, lastCode); }
+        if (mode === 'learn' && op !== 'explain') {
+          // Re-arm the gate: each Learn-mode run needs a fresh prediction
+          // (re-predict on retry — the verdict above stays visible as feedback).
+          predict = { compiles: null, code: '' };
+          document.querySelectorAll('.pbtn').forEach(x => x.classList.remove('sel'));
+          const pc = document.getElementById('predcode'); if (pc) pc.value = '';
+          updateRunGate();
+        }
         statusEl().textContent = out.passed ? 'passed' : 'failed';
         // Refresh the list/gauge/attempts after every run; if a pass advanced
         // the learner, load the next exercise into the editor.
@@ -390,9 +907,46 @@
           statusEl().textContent = 'advanced ✓';
         }
       } catch (e) {
-        // No server reachable → fall back to the static preview.
-        showDemo();
-        statusEl().textContent = 'offline';
+        logEvent('net', 'info', 'local /api/run unavailable (' + (e && e.message || e) + ') — routing to on-device path');
+        // The run fetch failed. Two cases:
+        //  (a) an exercise IS loaded — the seam served it, but this surface can't
+        //      compile (e.g. the offline Android app: no on-device Rust toolchain).
+        //      Guide the learner; don't dump an unrelated static demo over their work.
+        //  (b) nothing loaded (opened via file://, no server at all) → layout preview.
+        if (curExercise && window.AndroidSeam && AndroidSeam.runViaTermux && (op === 'run' || op === 'check' || op === 'test')) {
+          // On Android there's no local toolchain — compile NATIVELY on-device via an
+          // installed Termux (real rustc, offline, no server). Result arrives async at
+          // window.__termuxResult. If Termux isn't installed, guide the one-time setup.
+          let termuxOk = false; try { termuxOk = AndroidSeam.termuxInstalled(); } catch (_) {}
+          term.clear();
+          if (termuxOk) {
+            termuxOp = op;
+            statusEl().textContent = op === 'check' ? 'type-checking on-device…' : 'compiling on-device…';
+            term.writeln(d('$ ' + op + (op === 'check' ? ' — type-checking' : ' — compiling') + ' on-device with native rustc (Termux)…'));
+            termuxPending = 'r' + Date.now();
+            // Pass the op so Check does a fast type-check (rustc --emit=metadata, no run).
+            try { AndroidSeam.runViaTermux(editorEl().value, termuxPending, op); }
+            catch (e2) { term.writeln(r('Termux bridge error') + d(': ' + e2)); statusEl().textContent = 'error'; }
+          } else {
+            term.writeln(r('No on-device compiler yet') + d(' — install Termux to run Rust natively on your phone (offline, no account):'));
+            term.writeln(d('  1. Install Termux  ·  f-droid.org/packages/com.termux'));
+            term.writeln(d('  2. In Termux:  ') + g('pkg install rust'));
+            term.writeln(d('  3. In Termux:  ') + g('echo allow-external-apps=true >> ~/.termux/termux.properties'));
+            term.writeln(d('  Then press Run again — it compiles right here, fully offline.'));
+            term.writeln(d('(Until then: predict the outcome, read the lesson + book, check your guess.)'));
+            statusEl().textContent = 'install Termux for on-device run';
+          }
+        } else if (curExercise) {
+          term.clear();
+          term.writeln(r("can't run here") + d(' — this build has no Rust toolchain.'));
+          term.writeln(d('You can still predict the outcome, read the lesson + book, and check'));
+          term.writeln(d('your error-code guess. Compiling needs the desktop app or a connection.'));
+          term.writeln(d('(Your edits are saved.)'));
+          statusEl().textContent = 'run needs the desktop app / a connection';
+        } else {
+          showDemo();
+          statusEl().textContent = 'offline';
+        }
       } finally {
         btns.forEach(x=>x && (x.disabled=false));
         refit();
@@ -401,17 +955,45 @@
 
     // ── live rendering: the page reflects the REAL current exercise + list ──
     let lastCode = '';
+    // The most recent run/check/explain response, kept so a tier switch can
+    // re-render the Diagnostics panel without re-running (Learn withholds it).
+    let lastOut = null;
     const esc = s => (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const CHIP = { done:'✓', current:'▸', locked:'🔒', skipped:'»' };
 
     function renderList(data) {
       const box = document.getElementById('exlist');
       const items = (data && data.exercises) || [];
-      box.innerHTML = items.length ? items.map(e => {
+      // Header shows progress at a glance; on phones it's the accordion handle
+      // for the collapsed list (progressive disclosure — exercise first, list on tap).
+      const ttl = document.getElementById('exTitle');
+      if (ttl && items.length) {
+        const done = items.filter(e => e.status === 'done').length;
+        ttl.innerHTML = 'Exercises <span class="excount">' + done + '/' + items.length + ' ✓</span>'
+          + '<span class="excaret" aria-hidden="true">▾</span>';
+      }
+      // Per-phase progress for the group headers (done/total), mirroring the
+      // stage counts in the Lessons list — see how far you are within each topic.
+      const phaseStats = {};
+      items.forEach(e => {
+        const p = String(e.id).split('/')[0];
+        (phaseStats[p] = phaseStats[p] || { done: 0, total: 0 }).total++;
+        if (e.status === 'done') phaseStats[p].done++;
+      });
+      box.innerHTML = items.length ? items.map((e, i) => {
         const st = e.status || 'locked';
         const sel = st === 'current' ? ' sel' : '';
         const tries = e.attempts ? ` · ${e.attempts} ${e.attempts === 1 ? 'try' : 'tries'}` : '';
-        return `<div class="ex ${st}${sel}" data-id="${esc(e.id)}" role="button" tabindex="0" aria-label="Switch to ${esc(e.id)}. Status: ${st}${tries}"><span class="chip" aria-hidden="true">${CHIP[st] || '•'}</span>`
+        // Emit a phase-group header whenever the id's phase prefix changes
+        // (ids are `<phase>/<name>`, and the list is ordered by phase).
+        const phase = String(e.id).split('/')[0];
+        const prev = i > 0 ? String(items[i - 1].id).split('/')[0] : null;
+        const ps = phaseStats[phase];
+        const head = phase !== prev
+          ? `<div class="exphase" aria-hidden="true">${esc(phase.replace(/-/g, ' '))}`
+            + `<span class="exphasecount${ps.done === ps.total ? ' done' : ''}">${ps.done}/${ps.total}${ps.done === ps.total ? ' ✓' : ''}</span></div>`
+          : '';
+        return head + `<div class="ex ${st}${sel}" data-id="${esc(e.id)}" role="button" tabindex="0" aria-label="Switch to ${esc(e.id)}. Status: ${st}${tries}"><span class="chip" aria-hidden="true">${CHIP[st] || '•'}</span>`
              + `<span class="t">${esc(e.id)}<small>[${st}]${tries}</small></span></div>`;
       }).join('') : '<div class="ex"><span class="t" style="color:var(--fg-dim)">no exercises</span></div>';
       // The list items LOOK clickable (pointer cursor) — make them switch the
@@ -426,6 +1008,15 @@
             });
             if (res.ok) { statusEl().textContent = 'switched'; await loadState(false); }
             else if (res.status === 409) { statusEl().textContent = '“' + el.dataset.id + '” is done — press ↺ Reset to redo it'; }
+            else if (res.status === 423) {
+              // Soft gate: locked until earlier exercises are done — offer to jump ahead.
+              if (confirm('“' + el.dataset.id + '” is locked — the earlier exercises build up to it.\nJump ahead anyway?')) {
+                const r2 = await fetch('api/select', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id: el.dataset.id, force: true }) });
+                if (r2.ok) { statusEl().textContent = 'jumped ahead'; await loadState(false); }
+                else { statusEl().textContent = 'could not switch exercise'; }
+              } else { statusEl().textContent = 'good call — finish the earlier one first'; }
+            }
             else { statusEl().textContent = 'could not switch exercise'; }
           } catch (_) { statusEl().textContent = 'offline — could not switch'; }
         };
@@ -451,7 +1042,10 @@
         box.innerHTML = `<span class="rc-done">all ${tracked} concept${tracked === 1 ? '' : 's'} mastered ✓</span>`;
         return;
       }
-      box.innerHTML = due.map(c => `<span class="rc" title="a compiler error to refresh">${esc(c)}</span>`).join('')
+      // Each due code is an ACTIVE-RECALL prompt: the chip shows the code (try to
+      // remember what it means) and clicking reveals the explanation as the self-
+      // check — reusing the same Explain op as the diagnostics panel.
+      box.innerHTML = due.map(c => `<span class="rc" role="button" tabindex="0" data-code="${esc(c)}" aria-label="Recall ${esc(c)}, then activate to explain it" title="recall what ${esc(c)} means — then click to check with rustc --explain">${esc(c)}</span>`).join('')
                     + `<span class="rc-meta">${mastered}/${tracked} mastered</span>`;
     }
 
@@ -459,17 +1053,79 @@
     let predict = { compiles: null, code: '' };
     let curBookRefs = [];
     const editorEl = () => document.getElementById('editorCode');
+    const editorHL = () => document.getElementById('editorHL');
+    // Paint the syntax-highlight overlay from the editor buffer (esc-first, so the
+    // XSS-safe highlightRust only adds fixed-class spans) and mirror the scroll.
+    function syncHL() {
+      const ed = editorEl(), hl = editorHL();
+      if (!hl) return;
+      hl.innerHTML = highlightRust(esc(ed.value)) + '\n'; // trailing \n: last line + caret align
+      hl.scrollTop = ed.scrollTop;
+      hl.scrollLeft = ed.scrollLeft;
+    }
+
+    // Editor mode: Learn (strict — predict-before-Run, learner does the work) /
+    // Assist / Dev. Persisted; defaults to Learn (pedagogy-first).
+    let mode = (() => { try { return localStorage.getItem('ts-mode') || 'learn'; } catch (_) { return 'learn'; } })();
+    function setMode(m) {
+      mode = m;
+      try { localStorage.setItem('ts-mode', m); } catch (_) {}
+      document.querySelectorAll('#modesw button').forEach(b =>
+        b.classList.toggle('sel', b.dataset.mode === m));
+      // The predict bar is the active-recall gate; it's prominent in Learn mode,
+      // dimmed (optional) in Assist/Dev. The switcher highlight shows the mode.
+      const pb = document.getElementById('predictbar');
+      if (pb) pb.style.opacity = m === 'learn' ? '1' : '.55';
+      // Diagnostics are a tier feature — re-render the last run so switching tiers
+      // updates the panel immediately (Learn withholds it; Assist/Dev show it).
+      if (lastOut) renderDiag(lastOut);
+      updateRunGate();
+    }
+
+    // Run/Check are GATED in Learn until a prediction is locked (active recall).
+    // Make that obvious: disable the buttons + spotlight the question; once answered,
+    // collapse the prompt to a compact confirmation and light up Run. (Paul 2026-06-30:
+    // "it forces me to answer … disable the run button until the question is answered …
+    // make the questions stand out … should disappear once satisfied.")
+    function updateRunGate() {
+      const answered = predict.compiles !== null;
+      const gated = (mode === 'learn' && !answered);
+      ['runbtn', 'checkbtn'].forEach(id => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.disabled = gated;
+        b.classList.toggle('gated', gated);
+        if (gated) b.title = 'Answer the prediction above to unlock Run';
+      });
+      const runb = document.getElementById('runbtn');
+      if (runb) runb.classList.toggle('cta', mode === 'learn' && answered);
+      const pb = document.getElementById('predictbar');
+      if (pb) pb.classList.toggle('needs-answer', gated);
+      const prose = document.getElementById('predictProse');
+      if (prose) prose.style.display = (mode === 'learn' && !answered) ? '' : 'none';
+      const done = document.getElementById('predictDone');
+      if (done) {
+        if (mode === 'learn' && answered) {
+          done.hidden = false;
+          done.textContent = '✓ Predicted: ' + (predict.compiles ? 'passes' : 'fails')
+            + (predict.code ? ' (' + predict.code + ')' : '') + ' — now press Run to see the real result.';
+        } else { done.hidden = true; }
+      }
+    }
 
     // Compare the learner's locked prediction against the real result.
     function showPrediction(out) {
       if (predict.compiles === null) return;
       const el = document.getElementById('predverdict');
-      const actualCompiles = !!out.passed;
+      // `predict.compiles` (legacy field name) holds the SUCCESS prediction, and
+      // `out.passed` already means "compiled AND ran clean" — so this reads correctly
+      // for both compile-error and compile-but-panic (runtime) exercises.
+      const actualPasses = !!out.passed;
       const actualCode = lastCode || (((out.raw_stderr || '').match(/error\[(E\d{3,4})\]/) || [])[1] || '');
-      const compRight = predict.compiles === actualCompiles;
+      const compRight = predict.compiles === actualPasses;
       const parts = [compRight
         ? '✓ outcome: right'
-        : `✗ you said it ${predict.compiles ? 'compiles' : 'fails'}, it ${actualCompiles ? 'compiled' : 'failed'}`];
+        : `✗ you said it ${predict.compiles ? 'passes' : 'fails'}, it ${actualPasses ? 'passed' : 'failed'}`];
       if (predict.code.trim()) {
         const guess = predict.code.trim().toUpperCase();
         if (actualCode && guess === actualCode.toUpperCase()) parts.push(`✓ error ${actualCode} — nailed it`);
@@ -481,8 +1137,38 @@
     }
     const lsKey = id => 'ts-edit:' + id;
 
+    // Built-in glossary: tap the concept chip for a plain-language, OFFLINE
+    // definition (served by the local seam from glossary/glossary.toml, pulled
+    // from the bundled Book). Conceptual only — it never hands the exercise's fix.
+    async function showGloss(term) {
+      const box = document.getElementById('glossbox');
+      if (!box) return;
+      try {
+        const r = await fetch('api/glossary?term=' + encodeURIComponent(term)).then(x => x.json());
+        const t = r && r.term;
+        if (!t) {
+          box.innerHTML = `<span class="gl-term">${esc(term)}</span><span class="gl-def"> — no plain-language definition yet (coming soon).</span>`
+            + ` <span class="gl-x" id="glX" role="button" tabindex="0" title="close">✕</span>`;
+        } else {
+          const more = t.book_chapter
+            ? ` <a class="gl-more" href="#" id="glMore">read more in the Book →</a>` : '';
+          box.innerHTML =
+            `<span class="gl-term">${esc(t.name)}</span><span class="gl-def"> ${esc(t.definition)}</span>`
+            + `<div class="gl-foot"><span class="gl-src">${esc(t.source)}</span>${more}`
+            + ` <span class="gl-x" id="glX" role="button" tabindex="0" title="close">✕</span></div>`;
+          const a = document.getElementById('glMore');
+          if (a) a.onclick = e => { e.preventDefault(); showView('book', t.book_chapter); };
+        }
+        box.hidden = false;
+        const x = document.getElementById('glX');
+        if (x) { x.onclick = () => { box.hidden = true; box.innerHTML = ''; };
+          x.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { box.hidden = true; box.innerHTML = ''; } }; }
+      } catch (_) { /* offline without the local seam — leave the chip inert */ }
+    }
+
     // The hint ladder: each press climbs one rung (concept → expected error →
-    // solution outline, last resort). Server clamps to what the exercise carries.
+    // book/source review, last resort; never the solution). Server clamps to what
+    // the exercise carries.
     async function runHint() {
       try {
         const h = await fetch('api/hint?level=' + (hintLevel + 1)).then(r => r.json());
@@ -493,6 +1179,7 @@
         div.className = 'bref'; div.style.cursor = 'default';
         div.innerHTML = `<span class="c">hint ${h.level}/${h.max_level}${last ? ' · last resort' : ''}</span> ${esc(h.text)}`;
         document.getElementById('hintbox').appendChild(div);
+        setInsights(true); // the hint renders in the Insights drawer — reveal it
         if (last) document.getElementById('hintbtn').disabled = true;
       } catch (_) {}
     }
@@ -502,7 +1189,79 @@
       const ed = editorEl(), st = document.getElementById('editstate');
       if (st) st.textContent = (ed.value !== curOriginal) ? 'edited ✏️ (Run to test your fix)' : 'read & edit, then Run';
       if (curExercise) { try { localStorage.setItem(lsKey(curExercise), ed.value); } catch (_) {} }
+      syncHL();
     }
+
+    // Each exercise concept → the textbook lesson that teaches it, so an exercise
+    // can offer "read the lesson" and close the read→practice loop. Keys are the
+    // exercise `concept` tags; values are lesson file stems (see /api/lessons).
+    const CONCEPT_LESSON = {
+      'binding': '01-bindings-and-immutability',
+      'mutability': '02-mutability',
+      'integer-overflow': '05-number-types-and-overflow',
+      'explicit-numeric-conversion': '05-number-types-and-overflow',
+      'function-arg-types': '07-functions',
+      'function-argument-count': '07-functions',
+      'if-as-expression': '09-if-else-expressions',
+      'loop-break-value': '10-loops',
+      'loop-variable-scope': '10-loops',
+      'match-exhaustiveness': '11-match-intro',
+      'string-vs-str': '12-string-vs-str',
+      'vec-element-type': '14-vec-hashmap',
+      'vec-index-bounds': '14-vec-hashmap',
+      'hashmap-insert-ownership': '14-vec-hashmap',
+      'move-semantics': '15-ownership-and-moves',
+      'move-while-borrowed': '16-references-and-borrowing',
+      'move-out-of-borrow': '16-references-and-borrowing',
+      'assign-while-borrowed': '16-references-and-borrowing',
+      'borrow-checker-one-mut': '16-references-and-borrowing',
+      'borrow-checker-mut-vs-immut': '16-references-and-borrowing',
+      'borrow-must-not-outlive-value': '16-references-and-borrowing',
+      'no-dangling-refs': '16-references-and-borrowing',
+      'mutable-borrow-needs-mut': '16-references-and-borrowing',
+      'struct-construction': '18-structs',
+      'struct-field-privacy': '18-structs',
+      'method-syntax': '18-structs',
+      'enum-data': '19-enums-and-matching',
+      'if-let': '19-enums-and-matching',
+      'option-extract-value': '19-enums-and-matching',
+      'error-propagation': '20-error-handling',
+      'result-extract-value': '20-error-handling',
+      'question-mark-option-vs-result': '20-error-handling',
+      'custom-error-from': '20-error-handling',
+      'unwrap-panics-on-err': '20-error-handling',
+      'option-unwrap-panic': '20-error-handling',
+      'module-privacy': '22-paths-and-visibility',
+      'item-privacy': '22-paths-and-visibility',
+      'super-paths': '22-paths-and-visibility',
+      'use-and-paths': '23-the-use-keyword',
+      'generic-trait-bounds': '24-generics',
+      'type-inference-limits': '24-generics',
+      'trait-implementation': '25-traits',
+      'trait-in-scope': '25-traits',
+      'supertrait': '25-traits',
+      'operator-overloading': '25-traits',
+      'orphan-rule-newtype': '25-traits',
+      'lifetime-annotations': '26-lifetimes',
+      'struct-lifetime': '26-lifetimes',
+      'closure-type-inference': '27-closures',
+      'closure-move-capture': '27-closures',
+      'iterator-collect': '28-iterators',
+      'iterator-collect-inference': '28-iterators',
+      'iterator-consumer-sum': '28-iterators',
+      'iterator-into-iter-ownership': '28-iterators',
+      'iterate-by-reference': '28-iterators',
+      'shared-ownership': '29-smart-pointers',
+      'recursive-type-indirection': '29-smart-pointers',
+      'interior-mutability': '29-smart-pointers',
+      'thread-move-closures': '30-threads-and-concurrency',
+      'send-across-threads': '30-threads-and-concurrency',
+      'channel-message-passing': '30-threads-and-concurrency',
+      'shared-mutable-state': '30-threads-and-concurrency',
+      'trait-objects': '32-trait-objects-and-oop',
+      'dynamically-sized-types': '32-trait-objects-and-oop',
+      'unsafe-raw-pointers': '34-advanced-features',
+    };
 
     function renderCurrent(j) {
       const ed = editorEl();
@@ -512,19 +1271,41 @@
         return;
       }
       curExercise = j.exercise; curOriginal = j.code || '';
-      // fresh exercise → reset the hint ladder
+      // fresh exercise → reset the hint ladder + the Tutor prompt (no run yet)
       hintLevel = 0;
       const hb = document.getElementById('hintbox'); if (hb) hb.innerHTML = '';
       const hbtn = document.getElementById('hintbtn'); if (hbtn) hbtn.disabled = false;
+      renderTutor(null); // back to the pre-run prompt for the new exercise
+      setInsights(insightsPinned()); // collapse the drawer for a clean IDE (unless pinned)
       // fresh exercise → reset the prediction
       predict = { compiles: null, code: '' };
       document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('sel'));
       const pc = document.getElementById('predcode'); if (pc) pc.value = '';
       const pv = document.getElementById('predverdict'); if (pv) pv.textContent = '';
+      try { updateRunGate(); } catch (_) {}
       document.getElementById('lessonTitle').textContent = j.title || j.exercise;
       const mins = j.estimated_minutes ? ` · ~${j.estimated_minutes} min` : '';
-      document.getElementById('lessonSub').textContent =
-        `${j.exercise}${j.concept ? ' · ' + j.concept : ''}${mins} · reads → writes`;
+      // The concept is a tappable glossary chip — tap it for a plain-language,
+      // offline definition pulled from the bundled Book (never the exercise's fix).
+      const chip = j.concept
+        ? ` · <span class="gloss" id="conceptChip" role="button" tabindex="0" data-term="${esc(j.concept)}" title="Tap for a plain-language definition">${esc(j.concept)}</span>`
+        : '';
+      // Link to the textbook lesson that teaches this exercise's concept (closes
+      // the read→practice loop): read the lesson, then come back and write it.
+      const lessonId = j.concept ? CONCEPT_LESSON[j.concept] : null;
+      const lessonLink = lessonId
+        ? ` · <a href="#" class="lesson-link" id="lessonLink" data-lesson="${esc(lessonId)}" title="Read the textbook lesson that teaches this">📖 read the lesson</a>`
+        : '';
+      document.getElementById('lessonSub').innerHTML =
+        `${esc(j.exercise)}${chip}${esc(mins)}${lessonLink} · reads → writes`;
+      const gb = document.getElementById('glossbox'); if (gb) { gb.hidden = true; gb.innerHTML = ''; }
+      const cc = document.getElementById('conceptChip');
+      if (cc) {
+        cc.onclick = () => showGloss(cc.dataset.term);
+        cc.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showGloss(cc.dataset.term); } };
+      }
+      const ll = document.getElementById('lessonLink');
+      if (ll) ll.onclick = e => { e.preventDefault(); showView('lessons', ll.dataset.lesson); };
       document.getElementById('editorBar').textContent = `${j.exercise} · main.rs`;
       // Restore a saved edit for this exercise if present, else the starter.
       let saved = null;
@@ -552,29 +1333,69 @@
 
     // Diagnostics pane from a run: prefer structured diagnostics, else scrape
     // error codes from the raw output (and prefill Explain with the first one).
+    // The Tutor reacts to your LAST run instead of asking the same static
+    // question forever (Paul: "there is no answer to the question it asks; the
+    // questions should disappear once it's satisfied"). Still strictly guide-only
+    // — it NEVER types the fix, and in Learn mode it never reveals the error code
+    // (you find that by hand; `code` is '' there). `passed` null = no run yet.
+    function renderTutor(passed, code) {
+      const el = document.getElementById('tutorbox');
+      if (!el) return;
+      const guide = ' <small>(I guide — I never type your fix. Press <b>Hint</b> to climb the ladder.)</small>';
+      if (passed === true) {
+        el.innerHTML = '✓ <b>Solved</b> — it compiles and runs. In one sentence, what was the bug?'
+          + ' Then it’s on to the next exercise. <small>(No hint needed — you did it.)</small>';
+      } else if (passed === false) {
+        el.innerHTML = code
+          ? '🔴 The compiler says <code>' + esc(code) + '</code> — open it in Diagnostics for the full write-up.'
+            + ' In your own words, what is it complaining about?' + guide
+          : '🔴 The compiler rejected it. Read the terminal top-to-bottom — the <b>first</b> error is the one to fix.'
+            + ' What is that first line pointing at?' + guide;
+      } else {
+        el.innerHTML = '💡 What did your prediction say, and what does the <code>--&gt;</code> line point at?' + guide;
+      }
+    }
+
     function renderDiag(out) {
       const box = document.getElementById('diag');
+      // Diagnostics are a TIER feature. Reset the remembered code each call so it
+      // reflects only the current run (never lingering across runs or modes).
+      lastCode = '';
+      // Learn = "by-hand errors only" (Paul's tier decision): withhold the parsed,
+      // clickable Diagnostics panel — the learner reads the raw terminal output and
+      // finds the error code themselves. Assist/Dev get the parsed panel below.
+      // (The predict-then-run feedback still reveals the real code — but only AFTER
+      // a guess is locked, which is the active-recall step, not a free hand-over.)
+      if (mode === 'learn') {
+        box.innerHTML = '<div class="diag note"><span class="lvl">[i]</span>'
+          + '<span class="msg">read it by hand<small>the compiler output is in the terminal above — find the error code yourself (switch to Assist to have it parsed)</small></span></div>';
+        return;
+      }
       let rows = [];
       if (out.diagnostics && out.diagnostics.length) {
         rows = out.diagnostics.map(dg => {
           const lvl = String(dg.level || 'note').toLowerCase();
           const cls = lvl.startsWith('err') ? 'error' : (lvl.startsWith('warn') ? 'warn' : 'note');
-          const loc = dg.span ? ` · L${dg.span.line}` : '';
+          const lineNo = dg.span && Number.isInteger(dg.span.line) ? dg.span.line : null;
           if (cls === 'error' && dg.code) lastCode = lastCode || dg.code;
-          // Rows that carry a code are clickable → Explain that code.
-          const act = dg.code
-            ? ` data-code="${esc(dg.code)}" role="button" tabindex="0" aria-label="Explain ${esc(dg.code)}" title="click to explain ${esc(dg.code)}"`
+          // The code is a button → Explain it. The line number is a button → jump
+          // the editor caret to that line (char-offset based via setSelectionRange,
+          // so it's wrap-immune — no pixel mapping). Both only show in Assist/Dev.
+          const codeEl = dg.code
+            ? `<span class="diagcode" role="button" tabindex="0" data-code="${esc(dg.code)}" aria-label="Explain ${esc(dg.code)}" title="click to explain ${esc(dg.code)}">${esc(dg.code)}</span>`
+            : esc(lvl);
+          const jump = lineNo
+            ? ` · <span class="jumpline" role="button" tabindex="0" data-line="${lineNo}" aria-label="Jump to line ${lineNo} in the editor" title="jump to line ${lineNo} in the editor">L${lineNo}</span>`
             : '';
-          const hint = dg.code ? ' · click to explain' : '';
-          return `<div class="diag ${cls}"${act}><span class="lvl">[${cls === 'error' ? '!' : cls === 'warn' ? '~' : 'i'}]</span>`
-               + `<span class="msg">${esc((dg.code || lvl) + loc)}<small>${esc(dg.message)}${hint}</small></span></div>`;
+          return `<div class="diag ${cls}"><span class="lvl">[${cls === 'error' ? '!' : cls === 'warn' ? '~' : 'i'}]</span>`
+               + `<span class="msg">${codeEl}${jump}<small>${esc(dg.message)}</small></span></div>`;
         });
       } else {
         const txt = (out.raw_stderr || '') + '\n' + (out.raw_stdout || '');
         const codes = [...new Set((txt.match(/error\[(E\d{3,4})\]/g) || []).map(m => m.slice(6, -1)))];
         if (codes[0]) lastCode = codes[0];
         rows = codes.map(c =>
-          `<div class="diag error" data-code="${esc(c)}" role="button" tabindex="0" aria-label="Explain ${esc(c)}" title="click to explain ${esc(c)}"><span class="lvl">[!]</span><span class="msg">${esc(c)}`
+          `<div class="diag error"><span class="lvl">[!]</span><span class="msg"><span class="diagcode" role="button" tabindex="0" data-code="${esc(c)}" aria-label="Explain ${esc(c)}" title="click to explain ${esc(c)}">${esc(c)}</span>`
           + `<small>click to explain ${esc(c)}</small></span></div>`);
         if (out.passed) rows = ['<div class="diag note"><span class="lvl">[i]</span><span class="msg">passed<small>no diagnostics — nice</small></span></div>'];
         else if (!rows.length) rows = ['<div class="diag note"><span class="lvl">[i]</span><span class="msg">see terminal<small>read the raw output by hand</small></span></div>'];
@@ -647,7 +1468,7 @@
     }
     function mdToHtml(md) {
       const lines = esc(md).split('\n');
-      let html = '', list = null, inCode = false, quote = [], code = [];
+      let html = '', list = null, inCode = false, quote = [], code = [], para = [];
       const inline = s => s
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
@@ -663,6 +1484,10 @@
         .replace(/(^|[^A-Za-z0-9*])\*([^*\s](?:[^*]*[^*\s])?)\*(?![A-Za-z0-9*])/g, '$1<em>$2</em>');
       const closeList = () => { if (list) { html += list === 'ol' ? '</ol>' : '</ul>'; list = null; } };
       const flushQuote = () => { if (quote.length) { html += '<blockquote>' + inline(quote.join(' ')) + '</blockquote>'; quote = []; } };
+      // Join soft-wrapped (hard-wrapped-source) lines into one paragraph, so prose
+      // reads as paragraphs — not one <p> per physical line — and inline markup
+      // like **bold** that spans a wrap is parsed. Flushed at every block boundary.
+      const flushPara = () => { if (para.length) { html += '<p>' + inline(para.join(' ')) + '</p>'; para = []; } };
       // A GFM table separator row, e.g. `|----|:--:|---|` — pipes + dashes, opt. colons.
       const isSep = s => /\|/.test(s) && /-/.test(s) && /^[\s|:-]+$/.test(s);
       // Split a `| a | b |` row into trimmed, inline-rendered cells (escape-safe).
@@ -677,13 +1502,13 @@
         // ``` toggles a raw code block: no inline/list/heading handling inside.
         if (/^\s*```/.test(ln)) {
           if (inCode) { html += '<pre><code>' + highlightRust(code.join('\n')) + '</code></pre>'; inCode = false; }
-          else { closeList(); flushQuote(); code = []; inCode = true; }
+          else { flushPara(); closeList(); flushQuote(); code = []; inCode = true; }
           continue;
         }
         if (inCode) { code.push(ln); continue; }
         // GFM table: a `|`-row immediately followed by a |---|--- separator row.
         if (ln.includes('|') && isSep(lines[i + 1] || '')) {
-          closeList(); flushQuote();
+          flushPara(); closeList(); flushQuote();
           let t = '<table><thead><tr>' + cells(ln).map(c => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>';
           let j = i + 2;
           for (; j < lines.length && lines[j].includes('|') && lines[j].trim(); j++)
@@ -694,41 +1519,648 @@
         }
         // Blockquote: accumulate consecutive `&gt;` lines into one callout.
         const q = ln.match(/^&gt;\s?(.*)$/);
-        if (q) { closeList(); quote.push(q[1]); continue; }
+        if (q) { flushPara(); closeList(); quote.push(q[1]); continue; }
         flushQuote();
+        // Thematic break (`---`, `***`, `___`, optionally spaced) → <hr>. Must run
+        // BEFORE the list check, else a spaced "- - -" parses as a bullet. (Our
+        // markdown — lesson footers, section breaks — uses `---` liberally.)
+        if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(ln)) { flushPara(); closeList(); html += '<hr>'; continue; }
         const ul = ln.match(/^\s*[-*]\s+(.*)$/);
-        if (ul) { if (list !== 'ul') { closeList(); html += '<ul>'; list = 'ul'; } html += '<li>' + inline(ul[1]) + '</li>'; continue; }
+        if (ul) { flushPara(); if (list !== 'ul') { closeList(); html += '<ul>'; list = 'ul'; } html += '<li>' + inline(ul[1]) + '</li>'; continue; }
         const ol = ln.match(/^\s*\d+\.\s+(.*)$/);
-        if (ol) { if (list !== 'ol') { closeList(); html += '<ol>'; list = 'ol'; } html += '<li>' + inline(ol[1]) + '</li>'; continue; }
+        if (ol) { flushPara(); if (list !== 'ol') { closeList(); html += '<ol>'; list = 'ol'; } html += '<li>' + inline(ol[1]) + '</li>'; continue; }
         closeList();
         // ATX headings, h1–h6 (single regex; the corpus uses through h4). Each
         // carries a slug `id` so book_ref anchors can scroll to the section.
         const hm = ln.match(/^(#{1,6})\s+(.*)$/);
-        if (hm) { const lv = hm[1].length, id = slug(hm[2]); html += '<h' + lv + (id ? ' id="' + id + '"' : '') + '>' + inline(hm[2]) + '</h' + lv + '>'; }
-        else if (ln.trim()) html += '<p>' + inline(ln) + '</p>';
+        if (hm) { flushPara(); const lv = hm[1].length, id = slug(hm[2]); html += '<h' + lv + (id ? ' id="' + id + '"' : '') + '>' + inline(hm[2]) + '</h' + lv + '>'; }
+        else if (ln.trim()) para.push(ln); // accumulate; a blank line or block flushes
+        else flushPara();
       }
       if (inCode) html += '<pre><code>' + highlightRust(code.join('\n')) + '</code></pre>';
+      flushPara();
       closeList();
       flushQuote();
       return html;
     }
+    // Every learning surface lives under the "📚 Learn" tab (the hub). Keeps the
+    // top bar to just Practice (IDE) + Learn — the rest is a tap away, not on screen.
+    const LEARN_VIEWS = ['learn', 'lessons', 'quizzes', 'cheatsheets', 'book', 'glossary', 'library', 'roadmap', 'studyguide', 'logs'];
     async function showView(view, chapter, anchor) {
-      document.querySelectorAll('.tab').forEach(t => {
-        const on = t.dataset.view === view;
+      curView = view;
+      // Practice tab lights for the IDE; the Learn tab lights for the hub AND any
+      // of its sub-views (a lesson, a quiz, the book, …).
+      document.querySelectorAll('.tab[data-view]').forEach(t => {
+        const on = t.dataset.view === view
+          || (t.dataset.view === 'learn' && LEARN_VIEWS.includes(view));
         t.classList.toggle('active', on);
         t.setAttribute('aria-selected', on ? 'true' : 'false');
       });
       const m = document.querySelector('main'), d = document.getElementById('docview');
-      m.classList.toggle('focus', view === 'exercise');
-      if (view === 'dashboard' || view === 'exercise') { m.hidden = false; d.hidden = true; refit(); return; }
+      if (view === 'practice') { m.hidden = false; d.hidden = true; refit(); return; }
       m.hidden = true; d.hidden = false;
-      if (view === 'roadmap') {
-        d.innerHTML = '<p style="color:var(--fg-dim)">loading roadmap…</p>';
-        try { const j = await fetch('api/roadmap').then(r => r.json()); d.innerHTML = mdToHtml(j.markdown || ''); }
-        catch (_) { d.innerHTML = '<p>Roadmap unavailable (open via the local server).</p>'; }
+      if (view === 'learn') {
+        await renderLearnHub();
+      } else if (view === 'studyguide') {
+        await renderStudyGuide();
+      } else if (view === 'roadmap') {
+        await renderRoadmap();
       } else if (view === 'book') {
         await renderBook(chapter || null, anchor || null);
+      } else if (view === 'glossary') {
+        await renderGlossary();
+      } else if (view === 'lessons') {
+        await renderLessons(chapter || null); // `chapter` doubles as an optional lesson id
+      } else if (view === 'quizzes') {
+        await renderQuizzes(chapter || null);
+      } else if (view === 'cheatsheets') {
+        await renderCheatsheets(chapter || null);
+      } else if (view === 'logs') {
+        renderLogs(logFilter);
+      } else if (view === 'library') {
+        await renderLibrary(chapter || null, anchor || null);
       }
+    }
+
+    // Render a quiz with PER-QUESTION reveals: pair each `**Q<n>` with its
+    // `**A<n>` and tuck that one answer behind its own "Reveal answer" toggle,
+    // right after the question. This enforces the platform's predict-then-verify
+    // rule ONE question at a time (predict Q, reveal Q, move on) — stronger than a
+    // single reveal-all at the end. Falls back to the reveal-all block if a quiz
+    // doesn't use the `**Q<n>`/`**A<n>` convention (so a differently-shaped quiz
+    // still renders correctly).
+    function quizToHtml(md) {
+      const m = md.match(/^([\s\S]*?)(\n#{1,3}\s*Answers?\b[\s\S]*)$/i);
+      if (!m) return '<div class="bookbody quizbody">' + mdToHtml(md) + '</div>'; // no Answers section
+      const qPart = m[1], aPart = m[2];
+      const firstQ = qPart.search(/^\*\*Q\d+\b/m);
+      const aByNum = {};
+      aPart.split(/(?=^\*\*A\d+\b)/m).forEach(c => { const mm = c.match(/^\*\*A(\d+)/); if (mm) aByNum[mm[1]] = c.trim(); });
+      // Fallback to the single reveal-all when the per-question structure isn't there.
+      if (firstQ < 0 || !Object.keys(aByNum).length) {
+        return '<div class="bookbody quizbody">' + mdToHtml(qPart) + '</div>'
+          + '<details class="quizanswers"><summary>Reveal answers — predict every question first</summary>'
+          + '<div class="bookbody">' + mdToHtml(aPart) + '</div></details>';
+      }
+      const preamble = qPart.slice(0, firstQ); // title + intro + "## Questions" + tip
+      const qChunks = qPart.slice(firstQ).split(/(?=^\*\*Q\d+\b)/m).filter(s => s.trim());
+      let html = '<div class="bookbody quizbody">' + mdToHtml(preamble) + '</div>';
+      qChunks.forEach(qc => {
+        const n = (qc.match(/^\*\*Q(\d+)/) || [])[1];
+        const ans = n && aByNum[n];
+        html += '<div class="quizq"><div class="bookbody">' + mdToHtml(qc.trim()) + '</div>';
+        if (ans) html += '<details class="quizanswers qa-inline"><summary>Reveal answer — predict first</summary>'
+          + '<div class="bookbody">' + mdToHtml(ans) + '</div></details>';
+        html += '</div>';
+      });
+      // Keep the answers-section provenance note (e.g. "Verified on rustc 1.95.0"),
+      // minus the heading, as a quiet footer.
+      const note = aPart.slice(0, aPart.search(/^\*\*A\d+\b/m)).replace(/^#{1,3}\s*Answers?\b.*$/im, '').trim();
+      if (note) html += '<div class="bookbody quizprov">' + mdToHtml(note) + '</div>';
+      return html;
+    }
+
+    // The Quizzes tab: the per-phase self-check quizzes (served by /api/quizzes).
+    // Each quiz is `## Questions` then `## Answers`; `quizToHtml` pairs each
+    // question with its own reveal so predict-then-verify holds per question.
+    async function renderQuizzes(id) {
+      const d = document.getElementById('docview');
+      if (!id) {
+        d.innerHTML = '<h1>❓ Quizzes</h1><p style="color:var(--fg-dim)">loading…</p>';
+        let data;
+        try { data = await fetch('api/quizzes').then(r => r.json()); }
+        catch (_) { d.innerHTML = '<h1>❓ Quizzes</h1><p>Quizzes unavailable (open via the local server).</p>'; return; }
+        const items = data.quizzes || [];
+        const done = quizDoneSet();
+        const nDone = items.filter(q => done.has(q.id)).length;
+        d.innerHTML = '<h1>❓ Quizzes' + (nDone ? `<span class="readbadge">${nDone} of ${items.length} done</span>` : '') + '</h1>'
+          + `<p style="color:var(--fg-dim)">Per-phase self-checks — ${items.length} quizzes. PREDICT each answer before you reveal it; then verify. Fully offline.</p>`
+          + (items.length
+            ? '<ul class="booktoc">' + items.map(q => {
+                const isDone = done.has(q.id);
+                return `<li${isDone ? ' class="read"' : ''}>${isDone ? '<span class="readmark">✓</span>' : ''}<a href="#" class="quizjump" data-id="${esc(q.id)}">${esc(q.title)}</a></li>`;
+              }).join('') + '</ul>'
+            : '<p>no quizzes seeded — run the server with the bundled quizzes/.</p>');
+        d.querySelectorAll('.quizjump').forEach(a =>
+          a.onclick = e => { e.preventDefault(); renderQuizzes(a.dataset.id); });
+        d.scrollTop = 0;
+        return;
+      }
+      d.innerHTML = '<p style="color:var(--fg-dim)">loading quiz…</p>';
+      let q = null;
+      try { q = await fetch('api/quizzes?id=' + encodeURIComponent(id)).then(r => r.json()).then(j => j.quiz); }
+      catch (_) { q = null; }
+      const back = '<p><a href="#" class="quizback">← all quizzes</a></p>';
+      if (!q || !q.markdown) {
+        d.innerHTML = back + '<p>Quiz not found.</p>';
+      } else {
+        const md = q.markdown.replace(/<!--[\s\S]*?-->/g, '');
+        const backlinks = await phaseBackLinks(id);
+        d.innerHTML = back + quizToHtml(md) + backlinks;
+        // Completion: mark the quiz done once EVERY answer has been revealed
+        // (predicted, then verified). Surfaces as ✓ + count on the list.
+        const reveals = [...d.querySelectorAll('.quizanswers')];
+        if (reveals.length) {
+          const check = () => { if (reveals.every(x => x.open)) markQuizDone(id); };
+          reveals.forEach(x => x.addEventListener('toggle', check));
+        }
+      }
+      d.querySelectorAll('.quizback').forEach(a => a.onclick = e => { e.preventDefault(); renderQuizzes(null); });
+      wirePhaseBackLinks(d);
+      d.scrollTop = 0;
+    }
+
+    // The Cheatsheets tab: the per-phase quick-reference sheets (/api/cheatsheets).
+    // Plain markdown reference — no answers to hide, so just render it.
+    async function renderCheatsheets(id) {
+      const d = document.getElementById('docview');
+      if (!id) {
+        d.innerHTML = '<h1>📋 Cheatsheets</h1><p style="color:var(--fg-dim)">loading…</p>';
+        let data;
+        try { data = await fetch('api/cheatsheets').then(r => r.json()); }
+        catch (_) { d.innerHTML = '<h1>📋 Cheatsheets</h1><p>Cheatsheets unavailable (open via the local server).</p>'; return; }
+        const items = data.cheatsheets || [];
+        d.innerHTML = '<h1>📋 Cheatsheets</h1>'
+          + `<p style="color:var(--fg-dim)">Per-phase quick reference — ${items.length} sheets. The condensed syntax for each phase. Fully offline.</p>`
+          + (items.length
+            ? '<ul class="booktoc">' + items.map(c =>
+                `<li><a href="#" class="cheatjump" data-id="${esc(c.id)}">${esc(c.title)}</a></li>`).join('') + '</ul>'
+            : '<p>no cheatsheets seeded — run the server with the bundled cheatsheets/.</p>');
+        d.querySelectorAll('.cheatjump').forEach(a =>
+          a.onclick = e => { e.preventDefault(); renderCheatsheets(a.dataset.id); });
+        d.scrollTop = 0;
+        return;
+      }
+      d.innerHTML = '<p style="color:var(--fg-dim)">loading cheatsheet…</p>';
+      let c = null;
+      try { c = await fetch('api/cheatsheets?id=' + encodeURIComponent(id)).then(r => r.json()).then(j => j.cheatsheet); }
+      catch (_) { c = null; }
+      const back = '<p><a href="#" class="cheatback">← all cheatsheets</a></p>';
+      if (!c || !c.markdown) {
+        d.innerHTML = back + '<p>Cheatsheet not found.</p>';
+      } else {
+        const backlinks = await phaseBackLinks(id);
+        d.innerHTML = back + '<div class="bookbody">' + mdToHtml(c.markdown.replace(/<!--[\s\S]*?-->/g, '')) + '</div>' + backlinks;
+      }
+      d.querySelectorAll('.cheatback').forEach(a => a.onclick = e => { e.preventDefault(); renderCheatsheets(null); });
+      wirePhaseBackLinks(d);
+      d.scrollTop = 0;
+    }
+
+    // Human-readable curriculum phase names (the learner's journey), keyed by the
+    // shared per-phase id (same ids as quizzes/cheatsheets). Source: the phase
+    // cheatsheet titles.
+    const PHASE_NAMES = {
+      phase1: 'Foundations',
+      phase2: 'Control Flow',
+      phase3: 'Text & Collections',
+      phase4: 'Ownership & Borrowing',
+      phase5: 'Custom Types & Matching',
+      phase6: 'Organizing Code — modules, paths & use',
+      'phase6-generics': 'Generics, Traits & Lifetimes',
+      phase7: 'Functional Features & Smart Pointers',
+      phase8: 'Concurrency — threads & async',
+      phase9: 'Advanced — trait objects, patterns & capstone',
+      tooling: 'Tooling — Tests & Cargo',
+    };
+
+    // The Roadmap tab = the learner's CURRICULUM JOURNEY (NOT the project's build
+    // roadmap, which is a developer artifact and meaningless to a learner). Built
+    // offline from /api/lessons, grouped into the curriculum phases, each stage
+    // linking its lessons + cheatsheet + quiz so the learner sees the whole path
+    // and can dive into any part of it.
+    async function renderRoadmap() {
+      const d = document.getElementById('docview');
+      const head = '<h1>🗺️ Your Rust journey</h1>';
+      d.innerHTML = head + '<p style="color:var(--fg-dim)">loading…</p>';
+      let lessons = [];
+      try { lessons = (await fetch('api/lessons').then(r => r.json())).lessons || []; }
+      catch (_) { d.innerHTML = head + '<p>Roadmap unavailable (open via the local server).</p>'; return; }
+      if (!lessons.length) { d.innerHTML = head + '<p>No lessons seeded — run the server with the bundled lessons/.</p>'; return; }
+      // Group consecutive lessons by phase (lessons arrive in curriculum order).
+      const groups = [];
+      lessons.forEach(l => {
+        const ph = lessonToQuiz(parseInt(l.id, 10));
+        let g = groups[groups.length - 1];
+        if (!g || g.phase !== ph) { g = { phase: ph, name: PHASE_NAMES[ph] || ph, lessons: [] }; groups.push(g); }
+        g.lessons.push(l);
+      });
+      const prog = (document.getElementById('pct')?.textContent || '').trim();
+      const intro = `<p class="roadintro">The whole path, in order — ${lessons.length} lessons across ${groups.length} stages, from your first <code>let</code> binding to a capstone. Read a stage, practice it, then self-check with its quiz.`
+        + (prog ? ` <b>Exercises so far: ${esc(prog)}.</b>` : '') + '</p>';
+      const read = readLessonSet();
+      const quizDone = quizDoneSet(); // show a ✓ on a phase whose quiz is complete
+      const body = groups.map(g => {
+        const lis = g.lessons.map(l => {
+          const isRead = read.has(l.id);
+          return `<li${isRead ? ' class="read"' : ''}>${isRead ? '<span class="readmark">✓</span>' : ''}<a href="#" class="lessonjump" data-id="${esc(l.id)}">${esc(l.title)}</a></li>`;
+        }).join('');
+        const nRead = g.lessons.filter(l => read.has(l.id)).length;
+        const badge = nRead ? `<span class="readbadge">${nRead}/${g.lessons.length} read${nRead === g.lessons.length ? ' ✓' : ''}</span>` : '';
+        const bk = phaseBook(g.phase);
+        const links = `<a href="#" class="cheatlink" data-cheat="${esc(g.phase)}">📋 Cheatsheet</a>`
+          + ` · <a href="#" class="quizlink" data-quiz="${esc(g.phase)}">❓ Quiz${quizDone.has(g.phase) ? ' <span class="qzdone">✓</span>' : ''}</a>`
+          + ` · <a href="#" class="booklink" data-file="${esc(bk.file)}" data-page="${esc(bk.page)}">📖 ${esc(bk.chapter || bk.short)}</a>`;
+        return `<section class="roadphase"><h2>${esc(g.name)}${badge}</h2>`
+          + `<ul class="roadlessons">${lis}</ul><p class="roadlinks">${links}</p></section>`;
+      }).join('');
+      d.innerHTML = head + intro + body;
+      d.querySelectorAll('.lessonjump').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('lessons', a.dataset.id); });
+      d.querySelectorAll('.cheatlink').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('cheatsheets', a.dataset.cheat); });
+      d.querySelectorAll('.quizlink').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('quizzes', a.dataset.quiz); });
+      d.querySelectorAll('.booklink').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('library', a.dataset.file, a.dataset.page); });
+      d.scrollTop = 0;
+    }
+
+    // phaseId → that phase's FIRST lesson id (cached). Inverse of the lessonTo
+    // Quiz grouping: the first lesson whose phase matches. Lets a reference
+    // surface point back at where the phase's teaching begins.
+    let _phaseFirstLesson = null;
+    async function firstLessonIdOfPhase(phaseId) {
+      if (!_phaseFirstLesson) {
+        _phaseFirstLesson = {};
+        try {
+          const ls = (await fetch('api/lessons').then(r => r.json())).lessons || [];
+          ls.forEach(l => { const ph = lessonToQuiz(parseInt(l.id, 10)); if (ph && !_phaseFirstLesson[ph]) _phaseFirstLesson[ph] = l.id; });
+        } catch (_) {}
+      }
+      return _phaseFirstLesson[phaseId] || null;
+    }
+
+    // Reverse cross-link footer: from a reference surface (cheatsheet / quiz),
+    // back INTO the learning flow for that phase — so navigation is bidirectional
+    // (lesson↔cheatsheet/quiz, not just one way). `phaseId` is the sheet/quiz id.
+    async function phaseBackLinks(phaseId) {
+      const name = PHASE_NAMES[phaseId];
+      const first = await firstLessonIdOfPhase(phaseId);
+      const study = first
+        ? `<a href="#" class="studyphase" data-lesson="${esc(first)}">📚 Study ${esc(name || 'this phase')}</a>` : '';
+      const practice = `<a href="#" class="practicephase">📝 Practice</a>`;
+      return `<p class="phaseback">Back into learning: ${[study, practice].filter(Boolean).join(' · ')}</p>`;
+    }
+    // Wire the reverse-cross-link footer's links (idempotent; call after render).
+    function wirePhaseBackLinks(d) {
+      d.querySelectorAll('.studyphase').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('lessons', a.dataset.lesson); });
+      d.querySelectorAll('.practicephase').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('practice'); });
+    }
+
+    // Lesson read-tracking (localStorage) — visible progress beyond the exercise
+    // gauge: ✓ on read lessons in the Lessons list + per-stage counts on the
+    // Journey. Reading a lesson marks it; nothing to configure.
+    function readLessonSet() {
+      try { return new Set(JSON.parse(localStorage.getItem('ts-lessons-read') || '[]')); }
+      catch (_) { return new Set(); }
+    }
+    function markLessonRead(id) {
+      try {
+        const s = readLessonSet();
+        if (!s.has(id)) { s.add(id); localStorage.setItem('ts-lessons-read', JSON.stringify([...s])); }
+      } catch (_) {}
+    }
+    // Quiz completion — a quiz counts as "done" once every answer has been
+    // revealed (predicted, then verified). Same shape as lesson read-tracking:
+    // surfaces as ✓ + "N of M done" on the Quizzes list.
+    function quizDoneSet() {
+      try { return new Set(JSON.parse(localStorage.getItem('ts-quizzes-done') || '[]')); }
+      catch (_) { return new Set(); }
+    }
+    function markQuizDone(id) {
+      try {
+        const s = quizDoneSet();
+        if (!s.has(id)) { s.add(id); localStorage.setItem('ts-quizzes-done', JSON.stringify([...s])); }
+      } catch (_) {}
+    }
+
+    // Lesson number → the per-phase self-check quiz that covers it (each quiz
+    // spans a contiguous lesson range — see the quiz intros).
+    function lessonToQuiz(n) {
+      if (!n) return null;
+      if (n <= 8) return 'phase1';
+      if (n <= 11) return 'phase2';
+      if (n <= 14) return 'phase3';
+      if (n <= 17) return 'phase4';
+      if (n <= 20) return 'phase5';
+      if (n <= 23) return 'phase6';
+      if (n <= 26) return 'phase6-generics';
+      if (n <= 29) return 'phase7';
+      if (n <= 31) return 'phase8';
+      if (n <= 35) return 'phase9';
+      return 'tooling'; // 36–37
+    }
+
+    // Each curriculum phase's companion book in the offline 📚 Library — the
+    // original text that covers this phase in depth. The beginner path tracks
+    // "The Book" (TRPL); the tooling phase maps to The Cargo Book. This weaves
+    // the Library INTO the learning flow (#32) instead of leaving it a separate
+    // shelf: every lesson + Journey stage points at where to read deeper offline.
+    // Each phase → the exact companion chapter in the offline Library, with the
+    // real PDF page (extracted from the book's outline) so the reader DEEP-LINKS
+    // straight to that chapter instead of page 1. Beginner path → "The Book"
+    // (TRPL) chapters; the tooling phase → The Cargo Book.
+    const _TRPL = 'the-rust-programming-language.pdf', _TRPLn = 'The Rust Programming Language';
+    const PHASE_BOOK = {
+      phase1: { file: _TRPL, short: _TRPLn, chapter: 'Common Programming Concepts', page: 38 },
+      phase2: { file: _TRPL, short: _TRPLn, chapter: 'Common Programming Concepts', page: 38 },
+      phase3: { file: _TRPL, short: _TRPLn, chapter: 'Common Collections', page: 141 },
+      phase4: { file: _TRPL, short: _TRPLn, chapter: 'Understanding Ownership', page: 65 },
+      phase5: { file: _TRPL, short: _TRPLn, chapter: 'Enums and Pattern Matching', page: 107 },
+      phase6: { file: _TRPL, short: _TRPLn, chapter: 'Packages, Crates, and Modules', page: 122 },
+      'phase6-generics': { file: _TRPL, short: _TRPLn, chapter: 'Generic Types, Traits, and Lifetimes', page: 174 },
+      phase7: { file: _TRPL, short: _TRPLn, chapter: 'Iterators and Closures', page: 262 },
+      phase8: { file: _TRPL, short: _TRPLn, chapter: 'Fearless Concurrency', page: 336 },
+      phase9: { file: _TRPL, short: _TRPLn, chapter: 'Object-Oriented Programming Features', page: 394 },
+      tooling: { file: 'the-cargo-book.pdf', short: 'The Cargo Book', chapter: '', page: 1 },
+    };
+    const DEFAULT_BOOK = PHASE_BOOK.phase1;
+    function phaseBook(phaseId) { return PHASE_BOOK[phaseId] || DEFAULT_BOOK; }
+
+    // The "📚 Learn" hub — one place for ALL learning materials + progress, so
+    // the main screen can stay the task + the IDE (Paul's IDE-first direction).
+    // Everything here was previously scattered across two tabs + a ⋯ More menu.
+    async function renderLearnHub() {
+      const d = document.getElementById('docview');
+      d.innerHTML = '<h1>📚 Learn</h1><p style="color:var(--fg-dim)">loading…</p>';
+      let lessons = [], quizzes = [], exDone = 0, exTotal = 0;
+      try { lessons = (await fetch('api/lessons').then(r => r.json())).lessons || []; } catch (_) {}
+      try { quizzes = (await fetch('api/quizzes').then(r => r.json())).quizzes || []; } catch (_) {}
+      try { const ex = await fetch('api/exercises').then(r => r.json()); exDone = ex.done || 0; exTotal = (ex.exercises || []).length; } catch (_) {}
+      const read = readLessonSet(), qdone = quizDoneSet();
+      const nRead = lessons.filter(l => read.has(l.id)).length;
+      const nQuiz = quizzes.filter(q => qdone.has(q.id)).length;
+      const firstUnread = lessons.find(l => !read.has(l.id));
+      const card = (view, icon, title, sub) =>
+        `<a href="#" class="hubcard" data-view="${esc(view)}"><span class="hubicon" aria-hidden="true">${icon}</span>`
+        + `<span class="hubcol"><span class="hubtitle">${esc(title)}</span>`
+        + (sub ? `<small class="hubsub">${esc(sub)}</small>` : '') + '</span></a>';
+      d.innerHTML = '<h1>📚 Learn</h1>'
+        + '<p style="color:var(--fg-dim)">Your offline curriculum, references, and progress — everything but the editor lives here.</p>'
+        + (exTotal || lessons.length
+            ? `<div class="hubprog">📝 <b>${exDone}/${exTotal}</b> exercises · 🎓 <b>${nRead}/${lessons.length}</b> lessons · ❓ <b>${nQuiz}/${quizzes.length}</b> quizzes</div>` : '')
+        + (firstUnread ? `<button class="continuecta" data-id="${esc(firstUnread.id)}">▶ ${nRead ? 'Continue' : 'Start'} — ${esc(firstUnread.title)}</button>` : '')
+        + '<h2>Curriculum</h2><div class="hubgrid">'
+          + card('lessons', '🎓', 'Lessons', `${nRead} of ${lessons.length} read`)
+          + card('roadmap', '🗺️', 'Your Rust Journey', 'the whole path, by stage')
+          + card('studyguide', '📘', 'Study Guide', 'how to work through it')
+        + '</div><h2>Practice checks</h2><div class="hubgrid">'
+          + card('quizzes', '❓', 'Quizzes', `${nQuiz} of ${quizzes.length} done`)
+          + card('cheatsheets', '📋', 'Cheatsheets', 'per-phase quick reference')
+        + '</div><h2>Reference — read fully offline</h2><div class="hubgrid">'
+          + card('book', '📖', 'The Rust Book', '33 chapters, searchable')
+          + card('glossary', '📚', 'Glossary', 'plain-language terms')
+          + card('library', '📚', 'Library', '9 original books (PDF)')
+        + '</div>'
+        + '<p class="hubmin"><a href="#" class="hubcard-min" data-view="logs">🩺 Diagnostics &amp; logs</a></p>';
+      d.querySelector('.continuecta')?.addEventListener('click', function () { showView('lessons', this.dataset.id); });
+      d.querySelectorAll('.hubcard, .hubcard-min').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView(a.dataset.view); });
+      d.scrollTop = 0;
+    }
+
+    // The curriculum Study Guide — a top-level "how to work through this" doc
+    // (bundled at gui/study-guide.md, read fully offline). Reachable from every
+    // lesson's nav footer ("Study Guide"); renders in the docview like a lesson.
+    async function renderStudyGuide() {
+      const d = document.getElementById('docview');
+      d.innerHTML = '<p style="color:var(--fg-dim)">loading study guide…</p>';
+      let md = '';
+      try { md = await fetch('study-guide.md').then(r => r.text()); } catch (_) {}
+      d.innerHTML = '<p><a href="#" class="lessonback">← all lessons</a></p>'
+        + (md ? '<div class="bookbody">' + mdToHtml(md) + '</div>'
+              : '<p>Study guide unavailable.</p>');
+      d.querySelectorAll('.lessonback').forEach(a =>
+        a.onclick = e => { e.preventDefault(); renderLessons(null); });
+      d.scrollTop = 0;
+    }
+
+    // The Lessons tab: the embedded Patina curriculum (the 37 authored,
+    // beginner-tuned lessons), served offline by /api/lessons. With no id it
+    // lists the lessons in order; with one it renders that lesson's markdown and
+    // wires the in-lesson nav-footer links (prev/next lesson, Study Guide) to stay
+    // inside the app. Read the lesson, then switch to Practice to write it.
+    // Build the lessons list grouped into the 11 curriculum stages (derived from the
+    // lesson number, client-side — no server change), each with a per-stage read
+    // count. Lessons arrive in order; a stage break starts a new section.
+    function lessonStagesHtml(items, read) {
+      let html = '', cur = null;
+      items.forEach(l => {
+        const ph = lessonToQuiz(parseInt(l.id, 10));
+        if (ph !== cur) {
+          if (cur !== null) html += '</ul></section>';
+          cur = ph;
+          const st = items.filter(x => lessonToQuiz(parseInt(x.id, 10)) === ph);
+          const rd = st.filter(x => read.has(x.id)).length;
+          html += `<section class="lstage"><h2 class="lessonstage">${esc(PHASE_NAMES[ph] || ph)}`
+            + `<span class="stagecount${rd === st.length ? ' done' : ''}">${rd}/${st.length}${rd === st.length ? ' ✓' : ''}</span></h2><ul class="booktoc">`;
+        }
+        const isRead = read.has(l.id);
+        html += `<li${isRead ? ' class="read"' : ''} data-title="${esc(l.title.toLowerCase())}">`
+          + `${isRead ? '<span class="readmark">✓</span>' : ''}<a href="#" class="lessonjump" data-id="${esc(l.id)}">${esc(l.title)}</a></li>`;
+      });
+      if (cur !== null) html += '</ul></section>';
+      return html;
+    }
+    async function renderLessons(id) {
+      const d = document.getElementById('docview');
+      if (!id) {
+        d.innerHTML = '<h1>🎓 Lessons</h1><p style="color:var(--fg-dim)">loading…</p>';
+        let data;
+        try { data = await fetch('api/lessons').then(r => r.json()); }
+        catch (_) { d.innerHTML = '<h1>🎓 Lessons</h1><p>Lessons unavailable (open via the local server).</p>'; return; }
+        const items = data.lessons || [];
+        const read = readLessonSet();
+        const nRead = items.filter(l => read.has(l.id)).length;
+        // Turn the read-tracking into one-tap navigation: jump straight to the
+        // first lesson you haven't read yet (or Start at #1, or note you're done).
+        const firstUnread = items.find(l => !read.has(l.id));
+        const cta = items.length
+          ? (firstUnread
+              ? `<button class="continuecta" data-id="${esc(firstUnread.id)}">▶ ${nRead ? 'Continue' : 'Start'} — ${esc(firstUnread.title)}</button>`
+              : `<p class="allread">✓ You’ve read all ${items.length} lessons — pick any below to revisit.</p>`)
+          : '';
+        // A type-to-filter box (only worth showing past a handful of lessons) —
+        // find a topic instantly instead of scrolling the whole curriculum.
+        const filter = items.length > 8
+          ? `<input class="lessonfilter" type="search" placeholder="🔍 Filter lessons…" aria-label="Filter lessons by title" autocomplete="off">`
+          : '';
+        d.innerHTML = '<h1>🎓 Lessons' + (nRead ? `<span class="readbadge">${nRead} of ${items.length} read</span>` : '') + '</h1>'
+          + `<p style="color:var(--fg-dim)">The Patina curriculum — ${items.length} lessons for absolute beginners. Read a lesson, then switch to Practice to write it. Fully offline.</p>`
+          + cta + filter
+          + (items.length
+            ? lessonStagesHtml(items, read) + '<p class="lessonnomatch" hidden>No lessons match — clear the filter to see them all.</p>'
+            : '<p>no lessons seeded — run the server with the bundled lessons/.</p>');
+        d.querySelector('.continuecta')?.addEventListener('click', function () { renderLessons(this.dataset.id); });
+        d.querySelectorAll('.lessonjump').forEach(a =>
+          a.onclick = e => { e.preventDefault(); renderLessons(a.dataset.id); });
+        const fi = d.querySelector('.lessonfilter');
+        if (fi) {
+          const lis = [...d.querySelectorAll('.booktoc li')];
+          const secs = [...d.querySelectorAll('.lstage')];
+          const nm = d.querySelector('.lessonnomatch');
+          fi.addEventListener('input', () => {
+            const q = fi.value.trim().toLowerCase();
+            let shown = 0;
+            lis.forEach(li => { const m = !q || li.dataset.title.includes(q); li.hidden = !m; if (m) shown++; });
+            // collapse a whole stage when none of its lessons match
+            secs.forEach(s => { s.hidden = ![...s.querySelectorAll('li')].some(li => !li.hidden); });
+            if (nm) nm.hidden = shown !== 0;
+          });
+        }
+        d.scrollTop = 0;
+        return;
+      }
+      d.innerHTML = '<p style="color:var(--fg-dim)">loading lesson…</p>';
+      let l = null;
+      try { l = await fetch('api/lessons?id=' + encodeURIComponent(id)).then(r => r.json()).then(j => j.lesson); }
+      catch (_) { l = null; }
+      const back = '<p><a href="#" class="lessonback">← all lessons</a></p>';
+      if (!l || !l.markdown) {
+        d.innerHTML = back + '<p>Lesson not found.</p>';
+      } else {
+        let md = l.markdown.replace(/<!--[\s\S]*?-->/g, ''); // drop HTML comments
+        // Lift the nav footer (the final `---` block) out: its relative `.md`
+        // links (Study Guide, prev/next lesson) would render as literal text
+        // because mdToHtml only linkifies http(s) URLs — so we extract them into
+        // a real nav bar and drop the footer from the body.
+        const nav = [];
+        const fm = md.match(/^([\s\S]*)\n[-*_]{3,}[ \t]*\n([\s\S]*)$/);
+        if (fm && /\]\([^)]*\.md/.test(fm[2])) {
+          md = fm[1];
+          (fm[2].match(/\[([^\]]+)\]\(([^)]+\.md)(?:#[^)]*)?\)/g) || []).forEach(s => {
+            const mm = s.match(/\[([^\]]+)\]\(([^)]+\.md)(?:#[^)]*)?\)/);
+            nav.push({ label: mm[1].replace(/`/g, '').trim(), href: mm[2] });
+          });
+        }
+        const navHtml = nav.length
+          ? '<div class="lessonnav">' + nav.map(n =>
+              `<a href="#" class="lessonnavlink" data-href="${esc(n.href)}">${esc(n.label)}</a>`).join('') + '</div>'
+          : '';
+        // "Practice this lesson" — the reciprocal of the exercise's "read the
+        // lesson" link: list the exercises whose concept maps to THIS lesson
+        // (via CONCEPT_LESSON), so a learner can read then immediately practice.
+        let practiceHtml = '';
+        try {
+          const exs = await fetch('api/exercises').then(r => r.json());
+          const matches = (exs.exercises || []).filter(e => CONCEPT_LESSON[e.concept] === id);
+          if (matches.length) {
+            practiceHtml = '<div class="lessonpractice"><h3>Practice this lesson</h3><ul>'
+              + matches.map(e =>
+                  `<li><a href="#" class="practicelink" data-id="${esc(e.id)}">${esc(e.id)}</a>`
+                  + `<small> · ${esc(e.status || 'locked')}</small></li>`).join('')
+              + '</ul></div>';
+          }
+        } catch (_) {}
+        // Self-check: on the LAST lesson of a phase, link to that phase's quiz
+        // (the per-phase quizzes test the whole phase, so prompt at its end).
+        const n = parseInt(id, 10);
+        const quizId = lessonToQuiz(n);
+        const lastOfPhase = quizId && (n >= 37 || lessonToQuiz(n + 1) !== quizId);
+        const quizHtml = lastOfPhase
+          ? `<p class="lessonquiz">🧠 Finished this phase? <a href="#" class="quizlink" data-quiz="${esc(quizId)}">Take the self-check quiz →</a></p>`
+          : '';
+        // Companion quick-reference: the per-phase cheatsheet shares the SAME id
+        // scheme as the quiz (phase1…/tooling), so lessonToQuiz(n) also names this
+        // lesson's cheatsheet. Unlike the quiz (an end-of-phase checkpoint), the
+        // cheatsheet is a reference you reach for WHILE learning — so show it on
+        // every lesson of the phase. (Closes the last cross-link gap: cheatsheets
+        // were reachable only via their tab; now woven into the lesson flow.)
+        const cheatHtml = quizId
+          ? `<p class="lessoncheat">📋 Quick reference: <a href="#" class="cheatlink" data-cheat="${esc(quizId)}">this phase's cheat sheet →</a></p>`
+          : '';
+        // Companion original text: link to the phase's book in the offline Library,
+        // so a curious learner can read the same topic in depth (#32 — books woven
+        // into the lesson flow, not a separate shelf). Read fully offline.
+        const bk = phaseBook(quizId);
+        const bkLabel = bk.chapter ? `${bk.short} — “${bk.chapter}”` : bk.short;
+        const bookHtml = quizId
+          ? `<p class="lessonbook">📖 Read deeper: <a href="#" class="booklink" data-file="${esc(bk.file)}" data-page="${esc(bk.page)}">${esc(bkLabel)} (offline) →</a></p>`
+          : '';
+        d.innerHTML = back + '<div class="bookbody lessonbody">' + mdToHtml(md) + '</div>' + cheatHtml + bookHtml + practiceHtml + quizHtml + navHtml;
+        markLessonRead(id); // reading it = progress (✓ in the list + Journey counts)
+      }
+      d.querySelectorAll('.lessonback').forEach(a => a.onclick = e => { e.preventDefault(); renderLessons(null); });
+      d.querySelectorAll('.quizlink').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('quizzes', a.dataset.quiz); });
+      d.querySelectorAll('.cheatlink').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('cheatsheets', a.dataset.cheat); });
+      d.querySelectorAll('.booklink').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('library', a.dataset.file, a.dataset.page); });
+      // Wire the nav bar: a `.md` href routes to that lesson; the Study Guide link
+      // renders the curriculum study guide — all in-app, no page navigation.
+      d.querySelectorAll('.lessonnavlink').forEach(a => {
+        const href = a.dataset.href || '';
+        a.onclick = e => {
+          e.preventDefault();
+          if (/STUDY-GUIDE/i.test(href)) { renderStudyGuide(); return; }
+          renderLessons(href.split('#')[0].split('/').pop().replace(/\.md$/i, ''));
+        };
+      });
+      d.querySelectorAll('.practicelink').forEach(a =>
+        a.onclick = e => { e.preventDefault(); openExercise(a.dataset.id); });
+      d.scrollTop = 0;
+    }
+
+    // Select an exercise (mirroring the list's soft-gate) and jump to Practice —
+    // used by the "Practice this lesson" links so a lesson launches into its katas.
+    async function openExercise(id) {
+      try {
+        let res = await fetch('api/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+        if (res.status === 423) {
+          if (!confirm('“' + id + '” is locked — the earlier exercises build up to it.\nJump ahead anyway?')) return;
+          res = await fetch('api/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, force: true }) });
+        }
+        if (res.ok) { await loadState(false); showView('practice'); }
+        else if (res.status === 409) { alert('“' + id + '” is already done — open it from the list and press ↺ Reset to redo it.'); }
+        else { alert('Could not open that exercise.'); }
+      } catch (_) { alert('Offline — could not open that exercise.'); }
+    }
+
+    // The Glossary tab: a browsable, filterable list of every built-in term
+    // (served offline by /api/glossary with no query). Until now the glossary was
+    // only reachable by tapping a concept chip on the current exercise — this lets
+    // a learner read the whole vocabulary, and jump from any term to its Book
+    // chapter. Pure offline reference; no internet, no LLM.
+    async function renderGlossary() {
+      const d = document.getElementById('docview');
+      d.innerHTML = '<p style="color:var(--fg-dim)">loading glossary…</p>';
+      let terms = [];
+      try {
+        const j = await fetch('api/glossary').then(r => r.json());
+        terms = (j && j.terms) || [];
+      } catch (_) { d.innerHTML = '<p>Glossary unavailable (open via the local server).</p>'; return; }
+      terms = terms.slice().sort((a, b) => a.name.localeCompare(b.name));
+      const cards = terms.map(t => {
+        const hay = (t.name + ' ' + (t.aliases || []).join(' ') + ' ' + t.definition).toLowerCase();
+        const more = t.book_chapter
+          ? ` <a class="gloss-more" href="#" data-ch="${esc(t.book_chapter)}">read more in the Book →</a>` : '';
+        return `<div class="gloss-term" data-hay="${esc(hay)}">`
+          + `<h3 class="gloss-name">${esc(t.name)}</h3>`
+          + `<p class="gloss-def">${esc(t.definition)}</p>`
+          + `<div class="gloss-foot"><span class="gloss-src">${esc(t.source)}</span>${more}</div></div>`;
+      }).join('');
+      d.innerHTML = '<h1>Glossary</h1>'
+        + `<p style="color:var(--fg-dim)">Plain-language definitions of the Rust terms used across the exercises — fully offline. ${terms.length} terms.</p>`
+        + '<div class="booksearch"><input id="glq" type="search" placeholder="Filter terms…" aria-label="Filter glossary terms" autocomplete="off" autocapitalize="off" spellcheck="false"><span class="bscount" id="glCount"></span></div>'
+        + `<div id="glossList">${cards}</div>`;
+      d.querySelectorAll('.gloss-more[data-ch]').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('book', a.dataset.ch); });
+      const q = document.getElementById('glq');
+      if (q) q.addEventListener('input', () => {
+        const needle = q.value.trim().toLowerCase();
+        let shown = 0;
+        d.querySelectorAll('.gloss-term').forEach(el => {
+          const hit = !needle || el.dataset.hay.includes(needle);
+          el.hidden = !hit;
+          if (hit) shown++;
+        });
+        const c = document.getElementById('glCount');
+        if (c) c.textContent = needle ? `${shown} match${shown === 1 ? '' : 'es'}` : '';
+      });
     }
 
     // The embedded Rust Book reader. With no chapter it renders the table of
@@ -823,25 +2255,43 @@
         } else { d.scrollTop = 0; }
       } else { d.scrollTop = 0; }
     }
-    document.querySelectorAll('.tab').forEach(t => t.onclick = () => showView(t.dataset.view));
+    document.querySelectorAll('.tab[data-view]').forEach(t => t.onclick = () => showView(t.dataset.view));
 
     // ── keyboard shortcuts (the footer keybar) — skip while typing in a field ──
     const KEYMAP = {
       r: () => runOp('run'), c: () => runOp('check'), h: runHint,
-      b: () => showView('book'), t: () => showView('roadmap'), d: () => showView('dashboard'),
+      b: () => showView('book'), t: () => showView('roadmap'), p: () => showView('practice'),
+      g: () => showView('glossary'), l: () => showView('lessons'), z: () => showView('quizzes'),
+      s: () => showView('cheatsheets'),
+      i: () => setInsights(!document.querySelector('main').classList.contains('show-insights'), true),
+      f: () => setFocusMode(!document.querySelector('main').classList.contains('no-list')),
+      '?': () => toggleKeysHelp(),
     };
+    function toggleKeysHelp(force) {
+      const el = document.getElementById('keyshelp');
+      if (el) el.hidden = force === undefined ? !el.hidden : !force;
+    }
     document.addEventListener('keydown', e => {
+      // Esc closes the keys-help — only consume it when the help is actually open.
+      if (e.key === 'Escape') {
+        const kh = document.getElementById('keyshelp');
+        if (kh && !kh.hidden) { toggleKeysHelp(false); return; }
+      }
       const tag = (e.target.tagName || '').toLowerCase();
       if (tag === 'textarea' || tag === 'input' || e.metaKey || e.ctrlKey || e.altKey) return;
       const fn = KEYMAP[e.key.toLowerCase()];
       if (fn) { e.preventDefault(); fn(); }
+    });
+    document.getElementById('keyshelp').addEventListener('click', e => {
+      if (e.target.id === 'keyshelp') toggleKeysHelp(false); // backdrop click
     });
 
     // ── a11y: roles + live regions so screen readers track state ──
     (() => {
       const nav = document.querySelector('nav.tabs');
       if (nav) nav.setAttribute('role', 'tablist');
-      document.querySelectorAll('.tab').forEach(t => {
+      // Only the real view tabs are role=tab; the ⋯ More button is a menu button (handled above).
+      document.querySelectorAll('.tab[data-view]').forEach(t => {
         t.setAttribute('role', 'tab');
         t.setAttribute('tabindex', '0');
         t.setAttribute('aria-selected', t.classList.contains('active') ? 'true' : 'false');
@@ -861,38 +2311,197 @@
       const h = document.documentElement;
       h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
     };
+    // ── Insights drawer: the right pane (Diagnostics / Book refs / Tutor) is
+    // supplementary — the real run output is the centre terminal — so it stays
+    // collapsed until the learner opens it or a Run/Hint surfaces something worth
+    // reading. The choice persists across sessions.
+    // The Insights drawer (Diagnostics / Book refs / Tutor) stays COLLAPSED by
+    // default so the main screen is just the task + the IDE (Paul's "focus on the
+    // IDE, don't show everything at once"). Only an explicit ▦ toggle PINS it open
+    // across sessions; the auto-open after a Run/Hint is transient — it surfaces
+    // that result, then a new exercise resets to the clean IDE.
+    function insightsPinned() {
+      try { return localStorage.getItem('ts-insights') === '1'; } catch (_) { return false; }
+    }
+    function setInsights(on, pin) {
+      document.querySelector('main').classList.toggle('show-insights', on);
+      document.getElementById('insightsBtn')?.setAttribute('aria-expanded', on ? 'true' : 'false');
+      if (pin) { try { localStorage.setItem('ts-insights', on ? '1' : '0'); } catch (_) {} }
+      if (typeof refit === 'function') refit();
+    }
+    document.getElementById('insightsBtn').onclick = () =>
+      setInsights(!document.querySelector('main').classList.contains('show-insights'), true);
+    setInsights(insightsPinned());
+    // ── Focus mode: collapse the exercise-list pane to give the practice work
+    // area the full width (the old "Exercise" tab did this; it's now a toggle so
+    // it composes with the Insights drawer). Persists across sessions.
+    function setFocusMode(on) {
+      document.querySelector('main').classList.toggle('no-list', on);
+      document.getElementById('focusBtn')?.setAttribute('aria-pressed', on ? 'true' : 'false');
+      try { localStorage.setItem('ts-focus', on ? '1' : '0'); } catch (_) {}
+      if (typeof refit === 'function') refit();
+    }
+    document.getElementById('focusBtn').onclick = () =>
+      setFocusMode(!document.querySelector('main').classList.contains('no-list'));
+    setFocusMode((() => { try { return localStorage.getItem('ts-focus') === '1'; } catch (_) { return false; } })());
     // run/check/explain → live POST to the local server, raw output into xterm.
     document.getElementById('runbtn').onclick = () => runOp('run');
     document.getElementById('checkbtn').onclick = () => runOp('check');
     // editable code: persist on input, reset restores the original starter.
     editorEl().addEventListener('input', markEdited);
+    editorEl().addEventListener('scroll', () => { const hl = editorHL(), ed = editorEl(); if (hl) { hl.scrollTop = ed.scrollTop; hl.scrollLeft = ed.scrollLeft; } });
+    // Dev-tier editor conveniences (Learn and Assist keep the textarea defaults —
+    // the charter has Learn block editor assists, and conveniences are the Dev
+    // tier's differentiator): Tab/Shift+Tab indent, Enter auto-indents, and brackets
+    // auto-close (with type-over + delete-the-empty-pair).
+    editorEl().addEventListener('keydown', e => {
+      // Ctrl/Cmd+Enter runs the exercise from inside the editor — every tier (Learn
+      // included): running your code is the core action, not an autocomplete-style
+      // assist. It calls runOp, so the Learn predict-first gate still applies.
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runOp('run'); return; }
+      if (mode !== 'dev') return;
+      const ed = editorEl(), UNIT = '    ', v = ed.value;
+      const s = ed.selectionStart, en = ed.selectionEnd;
+      const CLOSE = { '(': ')', '[': ']', '{': '}' };
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const lineStart = v.lastIndexOf('\n', s - 1) + 1;
+        const spansLines = v.slice(s, en).includes('\n');
+        if (!e.shiftKey && !spansLines) {
+          // common case: insert 4 spaces at the caret (replacing any one-line selection)
+          ed.value = v.slice(0, s) + UNIT + v.slice(en);
+          ed.selectionStart = ed.selectionEnd = s + UNIT.length;
+        } else {
+          // indent / dedent every line the selection touches (or the caret's line)
+          let selEnd = en;
+          if (selEnd > s && v[selEnd - 1] === '\n') selEnd -= 1; // a trailing newline doesn't pull in the next line
+          const nl = v.indexOf('\n', selEnd);
+          const blockEnd = nl === -1 ? v.length : nl;
+          const out = v.slice(lineStart, blockEnd).split('\n')
+            .map(ln => (e.shiftKey ? ln.replace(/^ {1,4}/, '') : UNIT + ln)).join('\n');
+          ed.value = v.slice(0, lineStart) + out + v.slice(blockEnd);
+          ed.selectionStart = lineStart;
+          ed.selectionEnd = lineStart + out.length;
+        }
+        markEdited();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        // start the new line at the current line's indentation, one level deeper
+        // after an opening `{`, and split a `{<caret>}` into a tidy block.
+        const lineStart = v.lastIndexOf('\n', s - 1) + 1;
+        const indent = (v.slice(lineStart, s).match(/^[ \t]*/) || [''])[0];
+        const opensBlock = v.slice(lineStart, s).trimEnd().endsWith('{');
+        const splitBrace = v[s - 1] === '{' && v[en] === '}';
+        let insert, caret;
+        if (splitBrace) { insert = '\n' + indent + UNIT + '\n' + indent; caret = 1 + indent.length + UNIT.length; }
+        else if (opensBlock) { insert = '\n' + indent + UNIT; caret = insert.length; }
+        else { insert = '\n' + indent; caret = insert.length; }
+        ed.value = v.slice(0, s) + insert + v.slice(en);
+        ed.selectionStart = ed.selectionEnd = s + caret;
+        markEdited();
+      } else if (CLOSE[e.key] && s === en && (s >= v.length || /[\s)\]},;]/.test(v[s]))) {
+        // auto-close: insert the matching bracket and leave the caret between them.
+        // Only when the next char won't be glued onto a word, so typing `(` before
+        // `foo` stays `(foo`, not `()foo`.
+        e.preventDefault();
+        ed.value = v.slice(0, s) + e.key + CLOSE[e.key] + v.slice(s);
+        ed.selectionStart = ed.selectionEnd = s + 1;
+        markEdited();
+      } else if ((e.key === ')' || e.key === ']' || e.key === '}') && s === en && v[s] === e.key) {
+        // type OVER an existing close bracket instead of doubling it
+        e.preventDefault();
+        ed.selectionStart = ed.selectionEnd = s + 1;
+      } else if (e.key === 'Backspace' && s === en && s > 0 && CLOSE[v[s - 1]] === v[s]) {
+        // backspace inside an empty `()`/`[]`/`{}` deletes both brackets at once
+        e.preventDefault();
+        ed.value = v.slice(0, s - 1) + v.slice(s + 1);
+        ed.selectionStart = ed.selectionEnd = s - 1;
+        markEdited();
+      }
+    });
     document.getElementById('resetbtn').onclick = () => { editorEl().value = curOriginal; markEdited(); editorEl().focus(); };
+    document.getElementById('termcopy')?.addEventListener('click', () => copyText(termText()));
+
+    // ── phone progressive disclosure: exercise-list accordion + folded terminal ──
+    const isPhone = () => window.matchMedia('(max-width:760px)').matches;
+    (() => {
+      const pane = document.querySelector('main > .pane:first-child');
+      const ttl = document.getElementById('exTitle');
+      if (pane && ttl) {
+        ttl.setAttribute('role', 'button');
+        ttl.setAttribute('tabindex', '0');
+        const toggle = () => { if (!isPhone()) return; pane.classList.toggle('open');
+          ttl.setAttribute('aria-expanded', pane.classList.contains('open') ? 'true' : 'false'); };
+        ttl.addEventListener('click', toggle);
+        ttl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      }
+      // terminal starts folded on phones (no output yet); tap the bar to peek
+      const t = document.querySelector('.terminal');
+      if (t && isPhone()) t.classList.add('tcollapsed');
+      t?.querySelector('.tbar')?.addEventListener('click', e => {
+        if (e.target.id === 'termcopy' || !isPhone()) return;
+        t.classList.toggle('tcollapsed'); try { refit(); } catch (_) {}
+      });
+    })();
+    function expandTerminal() {
+      const t = document.querySelector('.terminal');
+      if (t && t.classList.contains('tcollapsed')) { t.classList.remove('tcollapsed'); try { refit(); } catch (_) {} }
+    }
     document.getElementById('hintbtn').onclick = runHint;
     // predict-first: lock a compiles/fails guess (+ optional error code) before Run
     document.querySelectorAll('.pbtn').forEach(b => b.onclick = () => {
       document.querySelectorAll('.pbtn').forEach(x => x.classList.remove('sel'));
       b.classList.add('sel');
       predict.compiles = b.dataset.pred === 'compiles';
+      updateRunGate();
     });
-    document.getElementById('predcode').addEventListener('input', e => { predict.code = e.target.value; });
+    document.getElementById('predcode').addEventListener('input', e => { predict.code = e.target.value; updateRunGate(); });
+    // Mode switcher (Learn / Assist / Dev) + restore the saved mode.
+    document.querySelectorAll('#modesw button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+    setMode(mode);
     document.getElementById('explainbtn').onclick = () => {
       const code = (prompt('Diagnostic code to explain (letters/digits only):', lastCode) || '').trim();
       if (code) runOp('explain', { code });
     };
-    // Explain-from-diagnostic: click (or Enter/Space) a diagnostic row that carries
-    // a code to run Explain for it — no typing. Delegated so it survives re-renders.
+    // Move the editor caret to a 1-based line and select it. Char-offset based
+    // (setSelectionRange) so it's wrap-immune — no pixel mapping, which is what
+    // made an inline gutter overlay fragile. Focusing scrolls the selection into
+    // view; mirror the scroll onto the syntax-highlight overlay to keep it aligned.
+    function jumpToEditorLine(line) {
+      const ed = editorEl();
+      if (!ed || !Number.isFinite(line)) return;
+      const lines = ed.value.split('\n');
+      const target = Math.min(Math.max(1, line | 0), lines.length);
+      let start = 0;
+      for (let i = 0; i < target - 1; i++) start += lines[i].length + 1; // + the '\n'
+      const end = start + lines[target - 1].length;
+      ed.focus();
+      ed.setSelectionRange(start, end);
+      const hl = editorHL();
+      if (hl) { hl.scrollTop = ed.scrollTop; hl.scrollLeft = ed.scrollLeft; }
+    }
+    // Diagnostics are interactive in Assist/Dev: click (or Enter/Space) the CODE to
+    // Explain it, or the LINE number to jump the editor there. Delegated so it
+    // survives re-renders. (Learn withholds the whole panel — see renderDiag.)
     const diagBox = document.getElementById('diag');
-    const explainFromRow = row => { const c = row && row.getAttribute('data-code'); if (c) runOp('explain', { code: c }); };
-    diagBox.addEventListener('click', e => {
-      const row = e.target.closest('.diag[data-code]');
-      if (row) explainFromRow(row);
-    });
-    diagBox.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        const row = e.target.closest('.diag[data-code]');
-        if (row) { e.preventDefault(); explainFromRow(row); }
-      }
-    });
+    const explainFromEl = el => { const c = el && el.getAttribute('data-code'); if (c) runOp('explain', { code: c }); };
+    const actOnDiag = (e, key) => {
+      const jl = e.target.closest('.jumpline');
+      if (jl) { if (key) e.preventDefault(); jumpToEditorLine(+jl.getAttribute('data-line')); return; }
+      const code = e.target.closest('.diagcode');
+      if (code) { if (key) e.preventDefault(); explainFromEl(code); }
+    };
+    diagBox.addEventListener('click', e => actOnDiag(e, false));
+    diagBox.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') actOnDiag(e, true); });
+    // RECALL (spaced-repetition) chips: each due code is an active-recall prompt —
+    // activate it to reveal the explanation (the self-check). Reuses Explain.
+    const recallBox = document.getElementById('recallCodes');
+    const actOnRecall = (e, key) => {
+      const rc = e.target.closest('.rc[data-code]');
+      if (rc) { if (key) e.preventDefault(); explainFromEl(rc); }
+    };
+    recallBox.addEventListener('click', e => actOnRecall(e, false));
+    recallBox.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') actOnRecall(e, true); });
     window.addEventListener('load', () => { refit(); });
   </script>
 </body>

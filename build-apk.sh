@@ -34,6 +34,17 @@ if [ -d "$SIB/gui" ]; then
   rm -rf "$HERE/app/src/main/assets/store/lessons";   cp -r "$SIB/lessons"   "$HERE/app/src/main/assets/store/lessons"
   rm -rf "$HERE/app/src/main/assets/store/quizzes";   cp -r "$SIB/quizzes"   "$HERE/app/src/main/assets/store/quizzes"
   rm -rf "$HERE/app/src/main/assets/store/cheatsheets"; cp -r "$SIB/cheatsheets" "$HERE/app/src/main/assets/store/cheatsheets"
+  # Pre-convert the glossary TOML → JSON: the on-device server (MainActivity)
+  # serves the glossary as JSON, and parsing TOML in Java isn't worth it.
+  # tomllib is in the python3.11+ stdlib.
+  python3 - "$HERE/app/src/main/assets/store/glossary" <<'PY'
+import json, pathlib, sys, tomllib
+d = pathlib.Path(sys.argv[1])
+data = tomllib.loads((d / "glossary.toml").read_text(encoding="utf-8"))
+terms = data.get("term", [])
+(d / "glossary.json").write_text(json.dumps({"terms": terms}, ensure_ascii=False), encoding="utf-8")
+print(f"  + glossary.json ({len(terms)} terms)")
+PY
 else
   echo "[2/3] asset sync skipped (no sibling Tempered-Studio checkout)"
 fi

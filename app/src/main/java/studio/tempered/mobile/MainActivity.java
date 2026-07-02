@@ -164,6 +164,98 @@ public class MainActivity extends Activity {
         return b.append("\"").toString();
     }
 
+    /** A file's UTF-8 contents, or null if unreadable. */
+    private static String readFile(File f) {
+        try (InputStream in = new java.io.FileInputStream(f)) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192]; int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            return new String(out.toByteArray(), StandardCharsets.UTF_8);
+        } catch (Exception e) { return null; }
+    }
+
+    /** The first `# ` heading in a markdown doc — its title (fallback: the id). */
+    private static String mdTitle(String md, String fallback) {
+        for (String line : md.split("\n")) {
+            if (line.startsWith("# ")) return line.substring(2).trim();
+        }
+        return fallback;
+    }
+
+    /**
+     * Serve a seeded markdown collection (lessons/quizzes/cheatsheets) with the
+     * exact response shapes of the desktop server's md_collection: no id → the
+     * ordered {"<listKey>":[{id,title}…]} list (filename order = curriculum
+     * order); ?id=STEM → {"<itemKey>":{id,title,markdown}} or null on a miss.
+     * `id` is only ever COMPARED against real file stems — never joined onto a
+     * path — so a traversal value simply finds no match.
+     */
+    private String mdCollection(String subdir, String listKey, String itemKey, String id) {
+        File[] files = new File(storeDir, subdir).listFiles((d, n) -> n.endsWith(".md"));
+        if (files == null) files = new File[0];
+        java.util.Arrays.sort(files, java.util.Comparator.comparing(File::getName));
+        StringBuilder b = new StringBuilder("{");
+        if (id == null) {
+            b.append(jstr(listKey)).append(":[");
+            boolean first = true;
+            for (File f : files) {
+                String md = readFile(f);
+                if (md == null) continue;
+                String stem = f.getName().substring(0, f.getName().length() - 3);
+                if (!first) b.append(',');
+                first = false;
+                b.append("{\"id\":").append(jstr(stem))
+                 .append(",\"title\":").append(jstr(mdTitle(md, stem))).append('}');
+            }
+            b.append(']');
+        } else {
+            String item = null;
+            for (File f : files) {
+                String stem = f.getName().substring(0, f.getName().length() - 3);
+                if (stem.equals(id)) {
+                    String md = readFile(f);
+                    if (md != null)
+                        item = "{\"id\":" + jstr(stem) + ",\"title\":" + jstr(mdTitle(md, stem))
+                             + ",\"markdown\":" + jstr(md) + "}";
+                    break;
+                }
+            }
+            b.append(jstr(itemKey)).append(':').append(item == null ? "null" : item);
+        }
+        return b.append('}').toString();
+    }
+
+    /**
+     * The glossary, pre-converted to {"terms":[…]} JSON at build time
+     * (build-apk.sh; parsing TOML in Java isn't worth it). No term → the whole
+     * document; ?term=X → {"term":<match|null>}, matched by name, then alias,
+     * then substring — mirroring the desktop lookup order.
+     */
+    private String glossaryJson(String term) {
+        String doc = readFile(new File(storeDir, "glossary/glossary.json"));
+        if (doc == null) return term == null ? "{\"terms\":[]}" : "{\"term\":null}";
+        if (term == null) return doc;
+        try {
+            org.json.JSONArray terms = new org.json.JSONObject(doc).getJSONArray("terms");
+            String q = term.trim().toLowerCase();
+            org.json.JSONObject alias = null, sub = null;
+            for (int i = 0; i < terms.length(); i++) {
+                org.json.JSONObject t = terms.getJSONObject(i);
+                String name = t.optString("name", "").toLowerCase();
+                if (name.equals(q)) return "{\"term\":" + t + "}"; // exact wins outright
+                org.json.JSONArray as = t.optJSONArray("aliases");
+                if (alias == null && as != null) {
+                    for (int j = 0; j < as.length(); j++) {
+                        if (as.getString(j).trim().toLowerCase().equals(q)) { alias = t; break; }
+                    }
+                }
+                if (sub == null && name.contains(q)) sub = t;
+            }
+            org.json.JSONObject hit = alias != null ? alias : sub;
+            return "{\"term\":" + (hit == null ? "null" : hit.toString()) + "}";
+        } catch (Exception e) { return "{\"term\":null}"; }
+    }
+
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -190,6 +282,19 @@ public class MainActivity extends Activity {
                         String ch = req.getUrl().getQueryParameter("chapter");
                         return json(ch != null ? Seam.bookChapterJson(storeDir, ch) : Seam.bookTocJson(storeDir));
                     }
+                    // The Learn surfaces (lessons/quizzes/cheatsheets/glossary) are
+                    // bundled markdown/JSON in the seeded store — serve them with the
+                    // SAME response shapes as the desktop server (md_collection /
+                    // glossary_handler), so the gui works fully offline. These were
+                    // silently falling through to null = "unavailable" (Paul's report).
+                    if (path.endsWith("/api/lessons"))
+                        return json(mdCollection("lessons", "lessons", "lesson", req.getUrl().getQueryParameter("id")));
+                    if (path.endsWith("/api/quizzes"))
+                        return json(mdCollection("quizzes", "quizzes", "quiz", req.getUrl().getQueryParameter("id")));
+                    if (path.endsWith("/api/cheatsheets"))
+                        return json(mdCollection("cheatsheets", "cheatsheets", "cheatsheet", req.getUrl().getQueryParameter("id")));
+                    if (path.endsWith("/api/glossary"))
+                        return json(glossaryJson(req.getUrl().getQueryParameter("term")));
                     if (path.contains("/api/")) return null; // run/select/hint/etc → gui handles offline
                     // Everything else = the gui/ shell, served from assets.
                     String asset = "gui" + (path.equals("/") ? "/index.html" : path);
@@ -243,11 +348,21 @@ public class MainActivity extends Activity {
     }
 
     private void seedStoreFromAssets() throws Exception {
+        // Re-seed whenever the APP VERSION changes, not once-ever: updates ship
+        // new/updated content (lessons, quizzes, glossary…), and the old empty
+        // marker pinned the FIRST install's content forever. The copy only
+        // overwrites files that exist in assets — progress/state files aren't
+        // bundled, so a re-seed never touches them.
         File marker = new File(storeDir, ".seeded");
-        if (marker.exists()) return;
+        String want; // the installed versionName (AGP no longer generates BuildConfig)
+        try { want = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (Exception e) { want = "unknown"; }
+        if (marker.exists() && want.equals(readFile(marker))) return;
         copyAsset(getAssets(), "store", new File(getFilesDir(), "store"));
         marker.getParentFile().mkdirs();
-        new FileOutputStream(marker).close();
+        try (OutputStream out = new FileOutputStream(marker)) {
+            out.write(want.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     private void copyAsset(AssetManager am, String path, File dest) throws Exception {
