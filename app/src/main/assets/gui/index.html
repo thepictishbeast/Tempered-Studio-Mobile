@@ -22,7 +22,12 @@
 <!-- Bundled Noto Color Emoji (OFL) — local()-gated @font-face so systems WITH a
      system emoji font never download it; fontless FOSS-desktop builds still get
      full color emoji instead of tofu boxes. (Paul: bundle everything.) -->
-<link rel="stylesheet" href="vendor/emoji/noto-emoji.css" />
+<!-- ?v=2: dropped the keycap-base codepoints (#, *, 0-9) from the declared
+     unicode-ranges — with the emoji families FIRST in the stacks, bare digits
+     were hijacked by the emoji font and rendered wide ("1 9" gutter numbers,
+     spaced digits in ids). Bump the query on any future range change: clients
+     heuristically cache this sheet. -->
+<link rel="stylesheet" href="vendor/emoji/noto-emoji.css?v=2" />
 <style>
   :root {
     --accent: #f74c00;          /* Ferris orange */
@@ -35,13 +40,16 @@
     --done: #36c46b; --current: #2bb6d6; --locked: #6b7280;
     --skipped: #e0b020; --error: #ff5c5c; --warn: #e0b020; --note: #5aa9ff;
     --bg: #0e1116; --bg-2: #161b22; --bg-3: #1d2430; --line: #2a3340;
-    /* Emoji fallbacks (appended after the generic family) let the UI glyphs 📝🔮✓
-       render via whatever emoji font the OS ships — Win/Mac/Android/most Linux —
-       instead of tofu boxes. Bare-minimal Linux desktops still need a bundled
-       font (flagged to Paul); this fixes the common case for free. */
+    /* Emoji families FIRST, not last: every listed font is emoji-only (and the
+       bundled Noto faces are unicode-range-gated to emoji blocks), so letters
+       can never match them — but emoji always do. When they trailed the list,
+       Chromium left elements painted BEFORE the font chunk arrived stuck on
+       monochrome tofu (the 📝 Practice tab) even after load; leading order
+       makes the emoji font authoritative — verified by pixel probe
+       (0 → 92 colored px on the stuck tab). */
     --emoji: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "Android Emoji", "EmojiOne Color";
-    --fg: #e6edf3; --fg-dim: #9aa7b4; --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace, var(--emoji);
-    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif, var(--emoji);
+    --fg: #e6edf3; --fg-dim: #9aa7b4; --mono: var(--emoji), ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --ui: var(--emoji), system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
     --radius: 12px; --shadow: 0 6px 24px rgba(0,0,0,.35);
     /* syntax-highlight palette for rendered (read-only) Rust code blocks */
     --tok-k:#ff7a3c; --tok-s:#7ec97e; --tok-c:#6b7884; --tok-n:#d2a8ff; --tok-t:#5aa9ff; --tok-m:#e0b020;
@@ -49,6 +57,12 @@
   html[data-theme="light"] {
     --bg:#f6f7f9; --bg-2:#ffffff; --bg-3:#eef1f5; --line:#dde3ea;
     --fg:#1b2330; --fg-dim:#5b6776; --accent:#b7410e; --shadow:0 6px 24px rgba(0,0,0,.10);
+    /* The STATUS palette needs light variants too: the dark-tuned greens/blues
+       (#36c46b, #5aa9ff…) are ~2.5–3:1 on white — axe flagged them serious.
+       These deepened values clear WCAG AA (≥4.5:1) for small text on --bg-2. */
+    --done:#1a7f37; --current:#0e7490; --note:#0a66c2;
+    --error:#c62828; --warn:#9a6700; --skipped:#9a6700;
+    --accent-soft:#c44000; /* .excount text + the Run gradient's far stop: 4.99:1 on white */
     --tok-k:#b7410e; --tok-s:#2e7d32; --tok-c:#6b7884; --tok-n:#6f42c1; --tok-t:#0a66c2; --tok-m:#9a6700;
   }
   * { box-sizing: border-box; }
@@ -346,7 +360,9 @@
   .pbtn[data-pred="compiles"].sel { border-color:var(--done); box-shadow:inset 0 -2px 0 var(--done); color:var(--fg); }
   .pbtn[data-pred="fails"].sel { border-color:var(--error); box-shadow:inset 0 -2px 0 var(--error); color:var(--fg); }
   .pin { background:var(--bg-2); color:var(--fg); border:1px solid var(--line); border-radius:8px;
-    padding:5px 8px; font-family:var(--mono); font-size:12px; flex:1 1 160px; min-width:120px; outline:none; }
+    padding:5px 8px; font-family:var(--mono); font-size:12px; flex:1 1 160px; min-width:120px;
+    max-width:420px; /* fills a phone row, but doesn't sprawl ~1000px on desktop */
+    outline:none; }
   .pin:focus { border-color:var(--accent); }
   .pv { font-size:12.5px; font-weight:600; }
   .editor { margin:0 20px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-2);
@@ -359,11 +375,29 @@
      sharing one identical box so glyphs line up. The textarea owns input/caret/
      selection/scroll; the <pre> just paints colour and mirrors the scroll. */
   .editor .editwrap pre, .editor .editwrap textarea {
-    margin:0; padding:14px 16px; box-sizing:border-box; border:0;
+    /* left padding reserves the line-number gutter — IDENTICAL on both layers
+       so the transparent textarea's caret/selection stays glyph-aligned. */
+    margin:0; padding:14px 16px 14px 54px; box-sizing:border-box; border:0;
     font-family:var(--mono); font-size:13px; line-height:1.6; tab-size:4; -moz-tab-size:4;
     white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; }
-  .editor #editorHL { position:absolute; inset:0; overflow:hidden;
+  .editor #editorHL { position:absolute; inset:0; overflow:hidden; counter-reset:line;
     color:var(--fg); background:var(--bg-2); pointer-events:none; z-index:0; }
+  /* Line numbers: one `.cl` block per LOGICAL line (see hlLines); the number
+     hangs in the 54px padding strip with net-zero inline advance (30 − 38 + 8),
+     so code glyphs still start exactly where the textarea's do — and a soft-
+     wrapped line's continuation rows indent past the gutter, keeping every
+     number on the compiler's line, not the visual row. Numbers live only in
+     the aria-hidden overlay: copying from the editor NEVER picks them up.
+     This is the by-hand-errors affordance — rustc says `--> main.rs:4:5`;
+     now 4 sits in the margin instead of being counted on fingers. */
+  .editor #editorHL .cl { display:block; counter-increment:line; }
+  .editor #editorHL .cl::before { content:counter(line); display:inline-block; width:30px;
+    margin-left:-38px; margin-right:8px; text-align:right;
+    color:var(--fg-dim); opacity:.55; font-size:11px; }
+  /* A line the last run's diagnostics flagged (Assist/Dev): its NUMBER turns
+     error-red — the visual "error ↔ line" bridge next to the L# jump links.
+     Learn never sets marks (by-hand); edits clear them (stale). */
+  .editor #editorHL .cl.err::before { color:var(--error); opacity:1; font-weight:700; }
   .editor .editwrap textarea { display:block; width:100%; position:relative; z-index:1; outline:none;
     background:transparent; color:transparent; caret-color:var(--fg); -webkit-text-fill-color:transparent;
     resize:vertical; min-height:300px; max-height:60vh; }
@@ -388,7 +422,9 @@
   .terminal { margin:0 20px 18px; border:1px solid var(--line); border-radius:var(--radius); background:#0a0d12;
     box-shadow:var(--shadow); display:flex; flex-direction:column; height:240px; overflow:hidden; }
   .terminal .tbar{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);
-    font-family:var(--mono);font-size:11.5px;color:var(--fg-dim);flex:0 0 auto}
+    /* FIXED color, not var(--fg-dim): the terminal keeps its dark background in
+       BOTH themes, so light-theme fg-dim (#5b6776) failed contrast on it. */
+    font-family:var(--mono);font-size:11.5px;color:#9aa7b4;flex:0 0 auto}
   .xterm-host{flex:1;min-height:0;padding:6px 8px}
   .xterm-host .xterm,.xterm-host .xterm-viewport{height:100%!important;background:transparent!important}
   .throbber{color:var(--accent-soft);display:inline-block}
@@ -742,9 +778,20 @@
         return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
       } catch (_) { return ''; }
     }
+    // Stale-render guard: navigating while a view's fetch is still in flight must
+    // not let the OLD render clobber the NEW view (fast taps; slower stores — the
+    // race that flipped a fresh quiz list back to a late-arriving lesson). Every
+    // renderer paints into a FRESH #docview node; a stale async continuation still
+    // holds the previous, now-DETACHED node and paints it harmlessly off-DOM.
+    function freshDocview() {
+      const old = document.getElementById('docview');
+      const d = old.cloneNode(false); // same id/attrs (incl. hidden state), no children
+      old.replaceWith(d);
+      return d;
+    }
     function renderLogs(filter) {
       logFilter = filter || logFilter || 'all';
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       const tabs = ['all'].concat(Object.keys(LOG_CATS)).map(c => {
         const n = c === 'all' ? LOGS.length : LOGS.filter(e => e.cat === c).length;
         return `<button class="logtab${c === logFilter ? ' on' : ''}" data-f="${c}">${esc(c === 'all' ? 'All' : LOG_CATS[c])} <span class="logn">${n}</span></button>`;
@@ -771,7 +818,7 @@
     // WebView can't display a PDF inline, and pdf.js works with zero network.
     let _libCache = null;
     async function renderLibrary(file, page) {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       if (file) { // open one book full-screen in the offline pdf.js viewer.
         // Full-page navigation (NOT an iframe): the server's global CSP sets
         // frame-ancestors 'none' + X-Frame-Options DENY (kept for security), which
@@ -801,7 +848,7 @@
     // MainActivity.runViaTermux() compiles+runs the code with the phone's real
     // rustc (via an installed Termux) and calls this back asynchronously.
     let termuxPending = null;
-    let termuxOp = 'run'; // which op fired the pending Termux call (run/check/test)
+    let termuxOp = 'run'; // which op fired the pending Termux call (run/check/test/explain)
     window.__termuxResult = function (cbId, res) {
       if (cbId !== termuxPending) return; // ignore stale/duplicate
       termuxPending = null;
@@ -824,6 +871,15 @@
           passed ? 'on-device run OK' : 'on-device run failed (exit ' + res.exit + ')\n' + text + (res.errmsg ? '\n' + res.errmsg : ''));
       }
       term.writeln('');
+      // Explain output is REFERENCE text (rustc --explain), not a run — no
+      // pass/fail verdict, no tutor, no predict re-arm.
+      if (termuxOp === 'explain') {
+        term.writeln(passed ? g('— rustc --explain, on-device via Termux —')
+                            : r('✗ explain failed') + d(' — is that a real diagnostic code (e.g. E0382)?'));
+        statusEl().textContent = passed ? 'explained ✓' : 'explain failed';
+        try { setInsights(true); } catch (_) {}
+        return;
+      }
       // Check type-checks only (no run) — reflect that in the verdict, not "ran".
       const okMsg = termuxOp === 'check' ? '✓ type-checks — no errors' : '✓ compiled & ran on-device';
       term.writeln(passed ? g(okMsg) + d(' — native rustc via Termux')
@@ -913,19 +969,31 @@
         //      compile (e.g. the offline Android app: no on-device Rust toolchain).
         //      Guide the learner; don't dump an unrelated static demo over their work.
         //  (b) nothing loaded (opened via file://, no server at all) → layout preview.
-        if (curExercise && window.AndroidSeam && AndroidSeam.runViaTermux && (op === 'run' || op === 'check' || op === 'test')) {
-          // On Android there's no local toolchain — compile NATIVELY on-device via an
-          // installed Termux (real rustc, offline, no server). Result arrives async at
-          // window.__termuxResult. If Termux isn't installed, guide the one-time setup.
+        if (curExercise && window.AndroidSeam && AndroidSeam.runViaTermux
+            && (op === 'run' || op === 'check' || op === 'test' || op === 'explain')) {
+          // On Android there's no local toolchain — compile (or `rustc --explain`)
+          // NATIVELY on-device via an installed Termux (real rustc, offline, no
+          // server). Result arrives async at window.__termuxResult. If Termux
+          // isn't installed, guide the one-time setup.
           let termuxOk = false; try { termuxOk = AndroidSeam.termuxInstalled(); } catch (_) {}
           term.clear();
           if (termuxOk) {
             termuxOp = op;
-            statusEl().textContent = op === 'check' ? 'type-checking on-device…' : 'compiling on-device…';
-            term.writeln(d('$ ' + op + (op === 'check' ? ' — type-checking' : ' — compiling') + ' on-device with native rustc (Termux)…'));
+            // For explain, the stdin payload is the DIAGNOSTIC CODE (E0382…),
+            // not the editor source — sanitized here AND in Java AND in bash.
+            const stdin = op === 'explain'
+              ? String((extra && extra.code) || '').replace(/[^A-Za-z0-9]/g, '')
+              : editorEl().value;
+            if (op === 'explain' && !stdin) {
+              term.writeln(r('no diagnostic code to explain')); statusEl().textContent = 'error'; return;
+            }
+            statusEl().textContent = op === 'explain' ? 'explaining on-device…'
+              : op === 'check' ? 'type-checking on-device…' : 'compiling on-device…';
+            term.writeln(d('$ ' + op + (op === 'explain' ? ' — rustc --explain ' + stdin
+              : op === 'check' ? ' — type-checking' : ' — compiling') + ' on-device with native rustc (Termux)…'));
             termuxPending = 'r' + Date.now();
             // Pass the op so Check does a fast type-check (rustc --emit=metadata, no run).
-            try { AndroidSeam.runViaTermux(editorEl().value, termuxPending, op); }
+            try { AndroidSeam.runViaTermux(stdin, termuxPending, op); }
             catch (e2) { term.writeln(r('Termux bridge error') + d(': ' + e2)); statusEl().textContent = 'error'; }
           } else {
             term.writeln(r('No on-device compiler yet') + d(' — install Termux to run Rust natively on your phone (offline, no account):'));
@@ -1054,12 +1122,45 @@
     let curBookRefs = [];
     const editorEl = () => document.getElementById('editorCode');
     const editorHL = () => document.getElementById('editorHL');
+    // Split highlighted HTML into per-LOGICAL-line `.cl` blocks so CSS counters
+    // can paint a line-number gutter that stays correct even when long lines
+    // soft-wrap (each block hanging-indents its wrapped rows past the gutter).
+    // The tokenizer emits spans that CROSS newlines (block comments /* */ and
+    // multi-line string literals), so a naive split would break tag balance:
+    // when a line leaves a span open, close it and REOPEN the same class on the
+    // next line. Empty lines get a zero-width space so their block keeps one
+    // row of height (an empty block would collapse and shift every line below).
+    // `marks` (optional Set of 1-based line numbers) flags lines the last run's
+    // diagnostics pointed at \u2014 their gutter numbers render in error red
+    // (Assist/Dev only; Learn never populates it \u2014 by-hand stays by-hand).
+    function hlLines(code, marks) {
+      const html = highlightRust(esc(code));
+      let open = null; // class of the span the previous line left unclosed
+      return html.split('\n').map((line, i) => {
+        let s = (open ? '<span class="' + open + '">' : '') + line;
+        const opens = (s.match(/<span /g) || []).length;
+        const closes = (s.match(/<\/span>/g) || []).length;
+        if (opens > closes) {
+          // Spans are flat (never nested), so the unclosed one is the LAST
+          // opened span with no </span> after it.
+          open = s.match(/<span class="([^"]+)">(?:(?!<\/span>)[\s\S])*$/)[1];
+          s += '</span>';
+        } else {
+          open = null;
+        }
+        const cls = marks && marks.has(i + 1) ? 'cl err' : 'cl';
+        return '<span class="' + cls + '">' + (s || '\u200b') + '</span>'; // ZWSP keeps an empty line's row height
+      }).join('');
+    }
     // Paint the syntax-highlight overlay from the editor buffer (esc-first, so the
     // XSS-safe highlightRust only adds fixed-class spans) and mirror the scroll.
+    // Gutter error marks: the lines the last run's diagnostics flagged (see
+    // renderDiag). Cleared on edit — a changed buffer makes them stale.
+    let diagMarks = new Set();
     function syncHL() {
       const ed = editorEl(), hl = editorHL();
       if (!hl) return;
-      hl.innerHTML = highlightRust(esc(ed.value)) + '\n'; // trailing \n: last line + caret align
+      hl.innerHTML = hlLines(ed.value, diagMarks);
       hl.scrollTop = ed.scrollTop;
       hl.scrollLeft = ed.scrollLeft;
     }
@@ -1189,6 +1290,7 @@
       const ed = editorEl(), st = document.getElementById('editstate');
       if (st) st.textContent = (ed.value !== curOriginal) ? 'edited ✏️ (Run to test your fix)' : 'read & edit, then Run';
       if (curExercise) { try { localStorage.setItem(lsKey(curExercise), ed.value); } catch (_) {} }
+      diagMarks = new Set(); // editing invalidates the last run's line marks
       syncHL();
     }
 
@@ -1361,6 +1463,9 @@
       // Diagnostics are a TIER feature. Reset the remembered code each call so it
       // reflects only the current run (never lingering across runs or modes).
       lastCode = '';
+      // Gutter marks reset per call too: Learn's early return below leaves them
+      // EMPTY (by-hand stays by-hand); Assist/Dev repopulate from the spans.
+      diagMarks = new Set();
       // Learn = "by-hand errors only" (Paul's tier decision): withhold the parsed,
       // clickable Diagnostics panel — the learner reads the raw terminal output and
       // finds the error code themselves. Assist/Dev get the parsed panel below.
@@ -1369,6 +1474,7 @@
       if (mode === 'learn') {
         box.innerHTML = '<div class="diag note"><span class="lvl">[i]</span>'
           + '<span class="msg">read it by hand<small>the compiler output is in the terminal above — find the error code yourself (switch to Assist to have it parsed)</small></span></div>';
+        syncHL(); // repaint with the (empty) marks — clears any Assist leftovers
         return;
       }
       let rows = [];
@@ -1377,6 +1483,7 @@
           const lvl = String(dg.level || 'note').toLowerCase();
           const cls = lvl.startsWith('err') ? 'error' : (lvl.startsWith('warn') ? 'warn' : 'note');
           const lineNo = dg.span && Number.isInteger(dg.span.line) ? dg.span.line : null;
+          if (lineNo && cls !== 'note') diagMarks.add(lineNo); // red gutter number (see hlLines)
           if (cls === 'error' && dg.code) lastCode = lastCode || dg.code;
           // The code is a button → Explain it. The line number is a button → jump
           // the editor caret to that line (char-offset based via setSelectionRange,
@@ -1401,6 +1508,7 @@
         else if (!rows.length) rows = ['<div class="diag note"><span class="lvl">[i]</span><span class="msg">see terminal<small>read the raw output by hand</small></span></div>'];
       }
       box.innerHTML = rows.join('');
+      syncHL(); // repaint the gutter with this run's marks
     }
 
     // Fetch the real list + current exercise and render them; if the server is
@@ -1624,7 +1732,7 @@
     // Each quiz is `## Questions` then `## Answers`; `quizToHtml` pairs each
     // question with its own reveal so predict-then-verify holds per question.
     async function renderQuizzes(id) {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       if (!id) {
         d.innerHTML = '<h1>❓ Quizzes</h1><p style="color:var(--fg-dim)">loading…</p>';
         let data;
@@ -1673,7 +1781,7 @@
     // The Cheatsheets tab: the per-phase quick-reference sheets (/api/cheatsheets).
     // Plain markdown reference — no answers to hide, so just render it.
     async function renderCheatsheets(id) {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       if (!id) {
         d.innerHTML = '<h1>📋 Cheatsheets</h1><p style="color:var(--fg-dim)">loading…</p>';
         let data;
@@ -1730,7 +1838,7 @@
     // linking its lessons + cheatsheet + quiz so the learner sees the whole path
     // and can dive into any part of it.
     async function renderRoadmap() {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       const head = '<h1>🗺️ Your Rust journey</h1>';
       d.innerHTML = head + '<p style="color:var(--fg-dim)">loading…</p>';
       let lessons = [];
@@ -1884,7 +1992,7 @@
     // the main screen can stay the task + the IDE (Paul's IDE-first direction).
     // Everything here was previously scattered across two tabs + a ⋯ More menu.
     async function renderLearnHub() {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       d.innerHTML = '<h1>📚 Learn</h1><p style="color:var(--fg-dim)">loading…</p>';
       let lessons = [], quizzes = [], exDone = 0, exTotal = 0;
       try { lessons = (await fetch('api/lessons').then(r => r.json())).lessons || []; } catch (_) {}
@@ -1926,7 +2034,7 @@
     // (bundled at gui/study-guide.md, read fully offline). Reachable from every
     // lesson's nav footer ("Study Guide"); renders in the docview like a lesson.
     async function renderStudyGuide() {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       d.innerHTML = '<p style="color:var(--fg-dim)">loading study guide…</p>';
       let md = '';
       try { md = await fetch('study-guide.md').then(r => r.text()); } catch (_) {}
@@ -1966,7 +2074,7 @@
       return html;
     }
     async function renderLessons(id) {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       if (!id) {
         d.innerHTML = '<h1>🎓 Lessons</h1><p style="color:var(--fg-dim)">loading…</p>';
         let data;
@@ -2126,7 +2234,7 @@
     // a learner read the whole vocabulary, and jump from any term to its Book
     // chapter. Pure offline reference; no internet, no LLM.
     async function renderGlossary() {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       d.innerHTML = '<p style="color:var(--fg-dim)">loading glossary…</p>';
       let terms = [];
       try {
@@ -2190,7 +2298,7 @@
     }
 
     async function renderBook(chapter, anchor, term) {
-      const d = document.getElementById('docview');
+      const d = freshDocview();
       const refs = curBookRefs || [];
       const quick = refs.length
         ? '<p style="color:var(--fg-dim)">For this exercise: '
@@ -2307,10 +2415,17 @@
     // (Exercise-list clicks are wired in renderList → POST /api/select, which also
     // rebuilds the list; the old init-time visual-only `.sel` toggle here was dead
     // code after that landed.)
+    // Theme toggle — PERSISTED: the choice used to reset to dark on every reload
+    // (the toggle flipped the attribute but never saved it).
     document.getElementById('theme').onclick = () => {
       const h = document.documentElement;
       h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('ts-theme', h.dataset.theme); } catch (_) {}
     };
+    try {
+      const saved = localStorage.getItem('ts-theme');
+      if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
+    } catch (_) {}
     // ── Insights drawer: the right pane (Diagnostics / Book refs / Tutor) is
     // supplementary — the real run output is the centre terminal — so it stays
     // collapsed until the learner opens it or a Run/Hint surfaces something worth
