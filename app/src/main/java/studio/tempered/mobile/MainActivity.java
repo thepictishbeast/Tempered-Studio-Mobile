@@ -109,7 +109,12 @@ public class MainActivity extends Activity {
     // We hand the user's source to Termux on stdin; a tiny bash one-liner compiles
     // it with the REAL on-device rustc and runs it, streaming compiler output back.
     private void doTermuxRun(String code, final String cbId, final String op) {
-        recordAttemptForCurrent(); // every run/check/test = a genuine attempt (hint gate)
+        // explain is a REFERENCE lookup (rustc --explain), not a try at the
+        // exercise — it must not earn hint rungs. Its stdin is a diagnostic
+        // code: sanitize to alphanumerics here (and again in bash, belt+braces).
+        final boolean explain = "explain".equals(op);
+        if (explain) code = code == null ? "" : code.replaceAll("[^A-Za-z0-9]", "");
+        else recordAttemptForCurrent(); // every run/check/test = a genuine attempt (hint gate)
         final String action = getPackageName() + ".TERMUX_RESULT." + cbId;
         final BroadcastReceiver rx = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent intent) {
@@ -143,14 +148,24 @@ public class MainActivity extends Activity {
         //    correct semantics for Check (it never runs the binary).
         //  • run/test → -C prefer-dynamic (dynamic libstd, skips the slow static link)
         //    + -C debuginfo=0, then run with the sysroot lib dir on LD_LIBRARY_PATH.
-        final String prefix =
-            "d=\"$HOME/.tempered\"; mkdir -p \"$d\"; cat > \"$d/main.rs\"; cd \"$d\"; " +
+        final String needRustc =
             "command -v rustc >/dev/null 2>&1 || { echo 'rustc not found in Termux — run:  pkg install rust' >&2; exit 127; }; ";
-        final String rustcCmd = "check".equals(op)
-            ? "rustc --edition 2021 --emit=metadata main.rs 2>&1"
-            : "S=\"$(rustc --print sysroot)\"; " +
-              "rustc --edition 2021 -C prefer-dynamic -C debuginfo=0 main.rs -o bin 2>&1 && LD_LIBRARY_PATH=\"$S/lib:$LD_LIBRARY_PATH\" ./bin";
-        exec.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{ "-c", prefix + rustcCmd });
+        final String bashLine;
+        if (explain) {
+            // stdin = a diagnostic code. Re-sanitize in bash (defense in depth —
+            // it's only ever an argument, never interpolated into the command).
+            bashLine = needRustc + "read -r c; c=\"${c//[^A-Za-z0-9]/}\"; rustc --explain \"$c\" 2>&1";
+        } else {
+            // The rustc line depends on the op (see the comment block above).
+            final String prefix =
+                "d=\"$HOME/.tempered\"; mkdir -p \"$d\"; cat > \"$d/main.rs\"; cd \"$d\"; " + needRustc;
+            final String rustcCmd = "check".equals(op)
+                ? "rustc --edition 2021 --emit=metadata main.rs 2>&1"
+                : "S=\"$(rustc --print sysroot)\"; " +
+                  "rustc --edition 2021 -C prefer-dynamic -C debuginfo=0 main.rs -o bin 2>&1 && LD_LIBRARY_PATH=\"$S/lib:$LD_LIBRARY_PATH\" ./bin";
+            bashLine = prefix + rustcCmd;
+        }
+        exec.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{ "-c", bashLine });
         exec.putExtra("com.termux.RUN_COMMAND_STDIN", code);
         exec.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
         exec.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
