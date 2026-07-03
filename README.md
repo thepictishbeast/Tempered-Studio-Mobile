@@ -10,8 +10,14 @@ on the device itself — no server, nobody's cloud.
 ## ⬇️ Install & Setup
 
 ### 1. Get the app
-**[⬇️ Download the latest APK](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/download/v0.3.2/TemperedStudio-v0.3.2-debug.apk)**
-&nbsp;·&nbsp; or browse **[all releases](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/latest)**
+**[⬇️ Get the latest release](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases/latest)** — the APK is attached at the bottom of the release page.
+&nbsp;·&nbsp; or browse **[all releases](https://github.com/thepictishbeast/Tempered-Studio-Mobile/releases)**
+
+<!-- Deliberately the /releases/latest PAGE, not a direct asset URL: a
+     version-stamped asset link rots the moment the next release ships (this
+     button once pointed five versions back). If a future release adopts a
+     STABLE asset name (tempered-studio.apk), switch to
+     /releases/latest/download/tempered-studio.apk for a one-tap download. -->
 
 It's a **debug-signed, sideloadable** APK — no Play Store needed.
 
@@ -36,7 +42,7 @@ It's a **debug-signed, sideloadable** APK — no Play Store needed.
    or use Obtainium / Firefox.)*
 3. Open the `.apk` → **Install**. (You'll see the Ferris-crab icon.)
 
-Everything — lessons, exercises, predicting, the Book, glossary — works **immediately, offline**, with no further setup.
+Everything — lessons, quizzes, cheatsheets, exercises, predicting, hints, Explain, the Book, the 9-book PDF Library, the glossary — works **immediately, offline**, with no further setup.
 
 ### 2. (Optional) Run Rust natively on the phone
 Compiling needs a Rust toolchain, which Android doesn't ship. Tempered Studio uses
