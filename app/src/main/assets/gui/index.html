@@ -39,7 +39,10 @@
     --accent-deep: #c44000;
     --done: #36c46b; --current: #2bb6d6; --locked: #6b7280;
     --skipped: #e0b020; --error: #ff5c5c; --warn: #e0b020; --note: #5aa9ff;
-    --bg: #0e1116; --bg-2: #161b22; --bg-3: #1d2430; --line: #2a3340;
+    /* Warm, layered dark: a subtly warm charcoal (not cold blue-gray) that
+       harmonises with the Ferris-orange accent and reads premium, not dev-tool.
+       Three distinct surface steps give real depth (bg < bg-2 < bg-3). */
+    --bg: #14120e; --bg-2: #1d1a15; --bg-3: #282219; --line: #372f24;
     /* Emoji families FIRST, not last: every listed font is emoji-only (and the
        bundled Noto faces are unicode-range-gated to emoji blocks), so letters
        can never match them — but emoji always do. When they trailed the list,
@@ -48,15 +51,22 @@
        makes the emoji font authoritative — verified by pixel probe
        (0 → 92 colored px on the stuck tab). */
     --emoji: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "Android Emoji", "EmojiOne Color";
-    --fg: #e6edf3; --fg-dim: #9aa7b4; --mono: var(--emoji), ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --fg: #f2ede3; --fg-dim: #ab9f8c; --mono: var(--emoji), ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
     --ui: var(--emoji), system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
-    --radius: 12px; --shadow: 0 6px 24px rgba(0,0,0,.35);
+    --radius: 14px; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 34px rgba(0,0,0,.5);
+    /* Top-edge highlight for elevated cards — the dark-mode depth cue: a hairline
+       of light along a card's top makes it read as physically raised. Inert on
+       the light theme (white cards), where it's set transparent. */
+    --edge-hi: rgba(255,255,255,.055);
     /* syntax-highlight palette for rendered (read-only) Rust code blocks */
     --tok-k:#ff7a3c; --tok-s:#7ec97e; --tok-c:#6b7884; --tok-n:#d2a8ff; --tok-t:#5aa9ff; --tok-m:#e0b020;
   }
   html[data-theme="light"] {
-    --bg:#f6f7f9; --bg-2:#ffffff; --bg-3:#eef1f5; --line:#dde3ea;
-    --fg:#1b2330; --fg-dim:#5b6776; --accent:#b7410e; --shadow:0 6px 24px rgba(0,0,0,.10);
+    /* Warm paper light theme (cards stay crisp white so the AA-tuned status
+       colours below keep their contrast). */
+    --bg:#f7f4ee; --bg-2:#ffffff; --bg-3:#f1ece2; --line:#e6ddcd;
+    --fg:#1b2330; --fg-dim:#5b6776; --accent:#b7410e; --shadow:0 1px 2px rgba(60,50,30,.06), 0 12px 30px rgba(60,50,30,.12);
+    --edge-hi:rgba(255,255,255,0); /* white cards — the top-edge highlight is a no-op here */
     /* The STATUS palette needs light variants too: the dark-tuned greens/blues
        (#36c46b, #5aa9ff…) are ~2.5–3:1 on white — axe flagged them serious.
        These deepened values clear WCAG AA (≥4.5:1) for small text on --bg-2. */
@@ -219,8 +229,8 @@
   .docview .hubprog b { color:var(--fg); }
   .docview .hubgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; margin:2px 0 6px; }
   .docview .hubcard { display:flex; align-items:center; gap:12px; padding:13px 15px; border:1px solid var(--line);
-    border-radius:12px; background:var(--bg-2); text-decoration:none; transition:.15s; }
-  .docview .hubcard:hover { border-color:var(--accent); transform:translateY(-1px); box-shadow:var(--shadow); }
+    border-radius:12px; background:var(--bg-2); text-decoration:none; transition:.15s; box-shadow:inset 0 1px 0 var(--edge-hi); }
+  .docview .hubcard:hover { border-color:var(--accent); transform:translateY(-1px); box-shadow:var(--shadow), inset 0 1px 0 var(--edge-hi); }
   .docview .hubicon { font-size:20px; line-height:1; }
   .docview .hubcol { display:flex; flex-direction:column; min-width:0; }
   .docview .hubtitle { color:var(--fg); font-weight:700; font-size:14.5px; }
@@ -315,7 +325,7 @@
 
   .center { display:flex; flex-direction:column; min-height:0; }
   .lesson { padding:16px 20px; overflow:auto; }
-  .lesson h1 { font-size:19px; margin:0 0 4px; line-height:1.25; }
+  .lesson h1 { font-size:22px; font-weight:700; margin:2px 0 7px; line-height:1.22; letter-spacing:-.02em; }
   .lesson .sub { color:var(--fg-dim); font-size:12.5px; margin-bottom:9px; }
   /* concept chip → tap for a glossary definition */
   .gloss { color:var(--accent-soft); border-bottom:1px dotted var(--accent-soft); cursor:pointer; }
@@ -366,7 +376,7 @@
   .pin:focus { border-color:var(--accent); }
   .pv { font-size:12.5px; font-weight:600; }
   .editor { margin:0 20px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-2);
-    box-shadow:var(--shadow); overflow:hidden; }
+    box-shadow:var(--shadow), inset 0 1px 0 var(--edge-hi); overflow:hidden; }
   .editor .bar { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line);
     font-size:12px; color:var(--fg-dim); font-family:var(--mono); }
   .editor .dot{width:10px;height:10px;border-radius:50%}
@@ -405,22 +415,23 @@
   .kw{color:var(--accent-soft)} .fn{color:var(--note)} .str{color:var(--done)} .cm{color:var(--fg-dim);font-style:italic}
   .runrow{display:flex;gap:10px;align-items:center;margin:0 20px 12px}
   .run{background:linear-gradient(135deg,var(--accent),var(--accent-soft));color:#fff;border:none;
-    padding:9px 16px;border-radius:9px;font-weight:600;cursor:pointer;font-size:13px;box-shadow:0 4px 14px rgba(247,76,0,.35);transition:.15s}
-  .run:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(247,76,0,.5)}
+    padding:9px 16px;border-radius:9px;font-weight:600;cursor:pointer;font-size:13px;box-shadow:0 4px 14px rgba(247,76,0,.35),inset 0 1px 0 rgba(255,255,255,.28);transition:.15s}
+  .run:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(247,76,0,.55),inset 0 1px 0 rgba(255,255,255,.28)}
   .run.cta{animation:runReady 1.4s ease-in-out infinite}
-  @keyframes runReady{0%,100%{box-shadow:0 4px 14px rgba(247,76,0,.35)}50%{box-shadow:0 4px 22px rgba(247,76,0,.7)}}
+  /* keep the inset top-gloss in both keyframes so it doesn't flicker while the CTA pulses */
+  @keyframes runReady{0%,100%{box-shadow:0 4px 14px rgba(247,76,0,.35),inset 0 1px 0 rgba(255,255,255,.28)}50%{box-shadow:0 4px 22px rgba(247,76,0,.7),inset 0 1px 0 rgba(255,255,255,.28)}}
   /* gated (Learn, no prediction yet): clearly not pressable yet */
   .run.gated,.ghost.gated{opacity:.4;cursor:not-allowed;filter:grayscale(.4);box-shadow:none;transform:none}
   .run.gated:hover,.ghost.gated:hover{transform:none;box-shadow:none}
-  .ghost{background:var(--bg-2);color:var(--fg);border:1px solid var(--line);padding:9px 14px;border-radius:9px;cursor:pointer;font-size:13px;transition:border-color .15s,background .15s,transform .12s}
-  .ghost:hover:not(.gated){border-color:var(--accent);background:var(--bg-3);transform:translateY(-1px)}
+  .ghost{background:var(--bg-2);color:var(--fg);border:1px solid var(--line);padding:9px 14px;border-radius:9px;cursor:pointer;font-size:13px;box-shadow:inset 0 1px 0 var(--edge-hi);transition:border-color .15s,background .15s,transform .12s,box-shadow .15s}
+  .ghost:hover:not(.gated){border-color:var(--accent);background:var(--bg-3);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.22),inset 0 1px 0 var(--edge-hi)}
   /* tactile press + keyboard focus rings across the IDE controls */
   .run:active:not(.gated),.ghost:active:not(.gated){transform:translateY(0)}
   .run:focus-visible,.ghost:focus-visible,.pbtn:focus-visible,.iconbtn:focus-visible,.modesw button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   /* embedded terminal — a real xterm.js widget */
-  .terminal { margin:0 20px 18px; border:1px solid var(--line); border-radius:var(--radius); background:#0a0d12;
-    box-shadow:var(--shadow); display:flex; flex-direction:column; height:240px; overflow:hidden; }
+  .terminal { margin:0 20px 18px; border:1px solid var(--line); border-radius:var(--radius); background:#0f0c07;
+    box-shadow:var(--shadow), inset 0 1px 0 var(--edge-hi); display:flex; flex-direction:column; height:240px; overflow:hidden; }
   .terminal .tbar{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);
     /* FIXED color, not var(--fg-dim): the terminal keeps its dark background in
        BOTH themes, so light-theme fg-dim (#5b6776) failed contrast on it. */
@@ -431,6 +442,29 @@
   .termcopy{background:var(--bg-3);color:var(--fg-dim);border:1px solid var(--line);border-radius:7px;
     padding:4px 10px;font:600 11.5px var(--mono);cursor:pointer}
   .termcopy:hover{color:var(--fg);border-color:var(--accent)}
+  /* console fold: a discoverable chevron collapses the output to its title bar,
+     reclaiming height to focus on code. Works on every platform (the tcollapsed
+     rules below are global, not phone-only). */
+  .tfold{background:none;border:none;color:var(--fg-dim);cursor:pointer;font-size:12px;line-height:1;padding:3px 5px;margin-right:1px;border-radius:5px}
+  .tfold:hover{color:var(--fg);background:var(--bg-3)}
+  .terminal.tcollapsed{height:auto}
+  .terminal.tcollapsed .xterm-host{display:none}
+  /* Native-Run one-time-setup card (Termux allow-external-apps) */
+  .tmxsetup{position:relative;margin:0 20px 14px;padding:14px 16px;border:1px solid var(--accent);
+    border-radius:var(--radius);background:rgba(247,76,0,.06);box-shadow:var(--shadow),inset 0 1px 0 var(--edge-hi)}
+  .tmxsetup-h{font-weight:700;font-size:14px;color:var(--fg);margin-bottom:5px}
+  .tmxsetup-p{margin:0 0 11px;font-size:13px;line-height:1.5;color:var(--fg-dim)}
+  .tmxsetup-p b{color:var(--fg)}
+  .tmxsetup-cmd{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+  .tmxsetup-cmd code{flex:1 1 200px;min-width:0;overflow:auto;white-space:nowrap;background:var(--bg);color:var(--fg);
+    border:1px solid var(--line);border-radius:8px;padding:9px 11px;font:12px/1.4 var(--mono)}
+  .tmxcopy{flex:0 0 auto;background:linear-gradient(135deg,var(--accent),var(--accent-soft));color:#fff;border:none;
+    border-radius:8px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;
+    box-shadow:0 3px 10px rgba(247,76,0,.3),inset 0 1px 0 rgba(255,255,255,.28);transition:.15s}
+  .tmxcopy:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(247,76,0,.45),inset 0 1px 0 rgba(255,255,255,.28)}
+  .tmxsetup-x{position:absolute;top:8px;right:10px;background:none;border:none;color:var(--fg-dim);
+    font-size:20px;line-height:1;cursor:pointer;padding:2px 6px}
+  .tmxsetup-x:hover{color:var(--fg)}
   /* toast (copy confirmation) */
   #toast{position:fixed;left:50%;bottom:54px;transform:translateX(-50%) translateY(8px);z-index:80;
     background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 16px;
@@ -501,9 +535,22 @@
 
   /* Phone-first reflow: the locked learner profile is mobile-first. Below ~760px
      the three columns stack into one scrollable page. */
+  @media (max-width: 470px) {
+    /* Narrow phones: collapse the wordmark to just the ◆ mark so the brand +
+       progress % + panel toggles fit ONE header row (they were overflowing and
+       shoving the Practice/Learn tabs onto a 3rd row). Reclaims a row of chrome
+       above the task — Paul's "main view = task, declutter" direction. The mark
+       still identifies the app; the wordmark returns above 470px. */
+    .brandtext { display:none; }
+  }
   @media (max-width: 760px) {
     body { height:auto; overflow-y:auto; overflow-x:hidden; }
     header { flex-wrap:wrap; gap:8px 12px; padding:8px 10px; }
+    /* Focus mode (hide the exercise-list COLUMN) is a desktop-only layout toggle;
+       the phone layout neuters it (the list stays a collapsible section below), so
+       the ◧ button did nothing when tapped — an inert, cryptic icon (Paul). Drop
+       it on phones; the theme + Insights toggles stay. */
+    #focusBtn { display:none; }
     /* 3 tabs + the ⋯ More menu fit a phone row now, so wrap instead of
        horizontal-scroll (scrolling also clips the dropdown via overflow). */
     .navwrap { order:5; width:100%; flex-wrap:wrap; margin-left:0; }
@@ -551,7 +598,7 @@
     /* ── Phone polish (Paul 2026-06-30: beautiful · simple · intuitive · capable) ── */
     .center { padding-bottom:6px; }
     .lesson { padding:16px 16px 4px; }
-    h1#lessonTitle { font-size:20px; line-height:1.25; }
+    h1#lessonTitle { font-size:21px; line-height:1.22; }
     .editor, .runrow { margin-left:14px; margin-right:14px; }
     /* Editor header: the Learn/Assist/Dev switcher was clipped to "Lea" and the
        "read & edit, then Run" label crammed the reset. Wrap cleanly: file + reset
@@ -578,7 +625,7 @@
 </head>
 <body>
   <header>
-    <div class="brand"><span class="mark">◆</span> Tempered&nbsp;Studio</div>
+    <div class="brand"><span class="mark">◆</span> <span class="brandtext">Tempered&nbsp;Studio</span></div>
     <!-- Active-learning surfaces stay as primary tabs (where you DO the work);
          reference/lookup surfaces fold into the ⋯ More menu (Paul, 2026-06-25:
          "tabs and a menu bar … things the user isn't working on shouldn't be on
@@ -659,8 +706,18 @@
         <span class="badge" id="statusline" style="margin-left:auto">ready</span>
       </div>
 
+      <!-- Native-Run (Termux) one-time-setup card. Hidden until an on-device run
+           fails for the allow-external-apps reason; gives a copy-ONLY-the-command
+           button (the terminal ⧉ copies the whole blob, which Paul found fiddly). -->
+      <div id="termuxSetup" class="tmxsetup" hidden>
+        <button class="tmxsetup-x" id="tmxSetupX" type="button" aria-label="Dismiss">×</button>
+        <div class="tmxsetup-h">⚙ Native Run needs a one-time Termux setting</div>
+        <p class="tmxsetup-p">Paste this into <b>Termux</b> and press enter, then tap <b>Run</b> again. It's a <b>one-time</b> setup — it persists across reboots and app updates.</p>
+        <div class="tmxsetup-cmd"><code id="tmxCmd"></code><button class="tmxcopy" id="tmxCopy" type="button">⧉ Copy command</button></div>
+      </div>
+
       <div class="terminal">
-        <div class="tbar"><span class="throbber" id="throb">⠹</span> <span class="tbar-lbl">rpro · output</span><span style="flex:1"></span><button class="termcopy" id="termcopy" title="Copy the output (e.g. to share an error)">⧉ copy</button></div>
+        <div class="tbar"><button class="tfold" id="tfold" type="button" title="Collapse / expand the output" aria-label="Collapse or expand the output">▾</button><span class="throbber" id="throb">⠹</span> <span class="tbar-lbl">rpro · output</span><span style="flex:1"></span><button class="termcopy" id="termcopy" title="Copy the output (e.g. to share an error)">⧉ copy</button></div>
         <div id="xterm" class="xterm-host"></div>
       </div>
     </section>
@@ -703,7 +760,7 @@
   <script src="vendor/xterm/addon-fit.js"></script>
   <script>
     // ── Real xterm.js terminal — renders true ANSI, like live rpro output ──
-    const C = { fg:'#cfe3d6', bg:'#0a0d12', green:'#36c46b', red:'#ff5c5c',
+    const C = { fg:'#e8e0d2', bg:'#0f0c07', green:'#36c46b', red:'#ff5c5c',
                 blue:'#5aa9ff', dim:'#9aa7b4', accent:'#ff7a3c' };
     const term = new Terminal({
       convertEol:true, cursorBlink:true, fontSize:12.5, scrollback:1000,
@@ -772,6 +829,17 @@
         document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); ta.remove(); toast('copied ✓'); return; } catch (_) {}
       toast('copy failed');
     }
+    // Native-Run (Termux) one-time setup: enable allow-external-apps. The command
+    // is IDEMPOTENT — it appends the line only if absent, then reloads — so it's
+    // safe to re-run and the setting sticks across reboots AND app updates; you do
+    // it once. Kept as ONE line so "⧉ Copy command" hands over a single paste.
+    const TERMUX_SETUP_CMD = "mkdir -p ~/.termux; grep -qxF 'allow-external-apps=true' ~/.termux/termux.properties 2>/dev/null || echo 'allow-external-apps=true' >> ~/.termux/termux.properties; termux-reload-settings";
+    function showTermuxSetup() {
+      const el = document.getElementById('termuxSetup'); if (!el) return;
+      const c = document.getElementById('tmxCmd'); if (c) c.textContent = TERMUX_SETUP_CMD;
+      el.hidden = false;
+    }
+    function hideTermuxSetup() { const el = document.getElementById('termuxSetup'); if (el) el.hidden = true; }
     function termText() { // the terminal's text (visible + scrollback), for Copy
       try { const b = term.buffer.active, out = [];
         for (let i = 0; i < b.length; i++) { const ln = b.getLine(i); if (ln) out.push(ln.translateToString(true)); }
@@ -862,11 +930,11 @@
       const blob = (text + ' ' + (res.errmsg || '')).toLowerCase();
       // Surface the #1 setup gotcha with the exact one-time fix.
       if (blob.includes('allow-external-apps')) {
-        term.writeln(''); term.writeln(r('Termux needs one more setting') + d(' — run these in Termux, then press Run again:'));
-        term.writeln('  ' + g('echo "allow-external-apps=true" >> ~/.termux/termux.properties'));
-        term.writeln('  ' + g('termux-reload-settings'));
-        logEvent('app', 'error', 'Termux allow-external-apps not enabled — needs the two setup lines + termux-reload-settings.');
+        term.writeln(''); term.writeln(r('Termux needs one more setting') + d(' — see the card above: tap ') + g('⧉ Copy command') + d(', paste it in Termux, then Run again.'));
+        showTermuxSetup();
+        logEvent('app', 'error', 'Termux allow-external-apps not enabled — showed one-time setup card (copy-command).');
       } else {
+        hideTermuxSetup();
         logEvent('run', passed ? 'info' : 'error',
           passed ? 'on-device run OK' : 'on-device run failed (exit ' + res.exit + ')\n' + text + (res.errmsg ? '\n' + res.errmsg : ''));
       }
@@ -1637,6 +1705,15 @@
         if (ul) { flushPara(); if (list !== 'ul') { closeList(); html += '<ul>'; list = 'ul'; } html += '<li>' + inline(ul[1]) + '</li>'; continue; }
         const ol = ln.match(/^\s*\d+\.\s+(.*)$/);
         if (ol) { flushPara(); if (list !== 'ol') { closeList(); html += '<ol>'; list = 'ol'; } html += '<li>' + inline(ol[1]) + '</li>'; continue; }
+        // A plain (non-bullet, non-heading) line DIRECTLY under a list item is the
+        // wrapped continuation of that bullet — our lesson bullets hard-wrap at
+        // ~80 cols, so the 2nd source line was rendering as a stray left-margin
+        // paragraph ("doesn't belong to the sentence" — Paul). Join it back into
+        // the <li>. A blank line still ends the list (it falls through to
+        // closeList below), so only true continuations (no blank between) merge.
+        if (list && ln.trim() && !/^#{1,6}\s/.test(ln.trim()) && html.endsWith('</li>')) {
+          html = html.slice(0, -5) + ' ' + inline(ln.trim()) + '</li>'; continue;
+        }
         closeList();
         // ATX headings, h1–h6 (single regex; the corpus uses through h4). Each
         // carries a slug `id` so book_ref anchors can scroll to the section.
@@ -2424,7 +2501,18 @@
     };
     try {
       const saved = localStorage.getItem('ts-theme');
-      if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
+      if (saved === 'light' || saved === 'dark') {
+        document.documentElement.dataset.theme = saved; // an explicit choice always wins
+      } else if (!window.AndroidSeam
+                 && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) {
+        // FIRST visit, no saved choice: follow the OS preference instead of
+        // forcing dark on light-mode users. (The 🌓 toggle still saves an
+        // explicit choice, which takes precedence forever after.)
+        // NOT on Android: the WebView's prefers-color-scheme reporting is
+        // undefined without DayNight/darkening config (this app sets none),
+        // so the phone app stays deterministically dark unless toggled.
+        document.documentElement.dataset.theme = 'light';
+      }
     } catch (_) {}
     // ── Insights drawer: the right pane (Diagnostics / Book refs / Tutor) is
     // supplementary — the real run output is the centre terminal — so it stays
@@ -2536,6 +2624,8 @@
     });
     document.getElementById('resetbtn').onclick = () => { editorEl().value = curOriginal; markEdited(); editorEl().focus(); };
     document.getElementById('termcopy')?.addEventListener('click', () => copyText(termText()));
+    document.getElementById('tmxCopy')?.addEventListener('click', () => copyText(TERMUX_SETUP_CMD));
+    document.getElementById('tmxSetupX')?.addEventListener('click', hideTermuxSetup);
 
     // ── phone progressive disclosure: exercise-list accordion + folded terminal ──
     const isPhone = () => window.matchMedia('(max-width:760px)').matches;
@@ -2550,17 +2640,35 @@
         ttl.addEventListener('click', toggle);
         ttl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
       }
-      // terminal starts folded on phones (no output yet); tap the bar to peek
+      // Console fold: the chevron collapses the output to its title bar so the
+      // editor gets the room. The choice persists; default = folded on phones
+      // (no output yet), open on desktop.
       const t = document.querySelector('.terminal');
-      if (t && isPhone()) t.classList.add('tcollapsed');
+      let cpref = null; try { cpref = localStorage.getItem('ts-console-folded'); } catch (_) {}
+      if (t) t.classList.toggle('tcollapsed', cpref === null ? isPhone() : cpref === '1');
+      syncConsoleChevron();
+      document.getElementById('tfold')?.addEventListener('click', e => { e.stopPropagation(); toggleConsole(); });
+      // mobile convenience: tapping the bar (not its buttons) also folds
       t?.querySelector('.tbar')?.addEventListener('click', e => {
-        if (e.target.id === 'termcopy' || !isPhone()) return;
-        t.classList.toggle('tcollapsed'); try { refit(); } catch (_) {}
+        if (e.target.id === 'termcopy' || e.target.id === 'tfold' || !isPhone()) return;
+        toggleConsole();
       });
     })();
+    function syncConsoleChevron() {
+      const t = document.querySelector('.terminal'), c = document.getElementById('tfold');
+      if (t && c) c.textContent = t.classList.contains('tcollapsed') ? '▸' : '▾';
+    }
+    function toggleConsole() {
+      const t = document.querySelector('.terminal'); if (!t) return;
+      const folded = t.classList.toggle('tcollapsed');
+      try { localStorage.setItem('ts-console-folded', folded ? '1' : '0'); } catch (_) {}
+      syncConsoleChevron(); try { refit(); } catch (_) {}
+    }
+    // A run always unfolds the console (output is coming); the persisted
+    // preference is only changed by an explicit chevron tap.
     function expandTerminal() {
       const t = document.querySelector('.terminal');
-      if (t && t.classList.contains('tcollapsed')) { t.classList.remove('tcollapsed'); try { refit(); } catch (_) {} }
+      if (t && t.classList.contains('tcollapsed')) { t.classList.remove('tcollapsed'); syncConsoleChevron(); try { refit(); } catch (_) {} }
     }
     document.getElementById('hintbtn').onclick = runHint;
     // predict-first: lock a compiles/fails guess (+ optional error code) before Run
@@ -2571,6 +2679,13 @@
       updateRunGate();
     });
     document.getElementById('predcode').addEventListener('input', e => { predict.code = e.target.value; updateRunGate(); });
+    // Enter in the error-code box = Run — the natural finishing gesture after
+    // typing a guess. Only once the pass/fail half is locked: the gate stays
+    // authoritative (with no outcome picked, Enter does nothing and the pulsing
+    // prompt keeps asking for the prediction).
+    document.getElementById('predcode').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && predict.compiles !== null) { e.preventDefault(); runOp('run'); }
+    });
     // Mode switcher (Learn / Assist / Dev) + restore the saved mode.
     document.querySelectorAll('#modesw button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
     setMode(mode);
