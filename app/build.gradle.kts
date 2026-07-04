@@ -12,8 +12,10 @@ android {
         // MINOR*100 + PATCH). These were stuck at 1/"0.1.0" through v0.2–v0.3.13,
         // so every installed APK reported itself as 0.1.0 — Obtainium therefore
         // saw "v0.1 installed" forever and update detection never converged.
-        versionCode = 10314
-        versionName = "0.3.14"
+        // Dev builds toward v0.4 take 10315+ (10400/"0.4.0" is RESERVED for the
+        // eventual great-v0.4 STABLE); prereleases so Obtainium can grab them.
+        versionCode = 10315
+        versionName = "0.4.0-dev.1"
     }
     buildTypes {
         release {
