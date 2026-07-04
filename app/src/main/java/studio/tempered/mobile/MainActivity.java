@@ -352,14 +352,6 @@ public class MainActivity extends Activity {
                     return null;
                 }
             }
-            @Override public void onPageFinished(WebView v, String url) {
-                v.evaluateJavascript(
-                    "(function(){try{var id=AndroidSeam.languageId();var b=document.createElement('div');" +
-                    "b.textContent='● on-device seam: '+id+' (offline · rpro-lang via JNI)';" +
-                    "b.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99999;font:12px/1.6 " +
-                    "ui-monospace,monospace;text-align:center;color:#0e1116;background:#f74c00;padding:4px';" +
-                    "document.body.appendChild(b);}catch(e){}})();", null);
-            }
         });
         web.loadUrl(BASE);
         setContentView(web);
