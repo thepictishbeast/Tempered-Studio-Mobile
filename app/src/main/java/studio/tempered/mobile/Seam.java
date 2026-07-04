@@ -35,4 +35,19 @@ public final class Seam {
      * bridge, so MainActivity counts them per exercise.
      */
     public static native String hintJson(String storeDir, int level, int attempts);
+
+    /**
+     * Record a run's outcome OFFLINE (the write-side mobile lacked → the
+     * "lockout"). Marks the exercise Done + advances Current to the next when
+     * `advance` (a passing run/test). Returns {"advanced_to": next id or null}.
+     */
+    public static native String recordRun(String storeDir, String id, boolean passed, boolean advance);
+
+    /** Switch the current exercise OFFLINE (tap a list item). Returns
+     *  {"ok":true,"current":id} or {"error":"unknown|done", "message":...}. */
+    public static native String selectExercise(String storeDir, String id, boolean force);
+
+    /** Ensure a Current exercise exists (the seeded store has no progress.json →
+     *  everything showed Locked). Sets the FIRST exercise Current if none is. */
+    public static native String ensureSeeded(String storeDir);
 }

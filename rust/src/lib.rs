@@ -88,6 +88,85 @@ pub extern "system" fn Java_studio_tempered_mobile_Seam_exercisesJson<'a>(
     jstr(&mut env, &out)
 }
 
+/// Record a run's outcome OFFLINE (the write-side that mobile lacked → the
+/// "lockout"). Mirrors what rpro-serve's /api/run does server-side: mark the
+/// exercise Done + advance Current to the next when `advance` (a passing
+/// run/test). Diagnostics are empty (Termux gives raw output, not parsed
+/// diagnostics — the review fold just gets no error code). Returns
+/// `{ "advanced_to": <next id or null> }`.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_recordRun<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+    exercise_id: JString<'a>,
+    passed: jni::sys::jboolean,
+    advance: jni::sys::jboolean,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let id: String = env.get_string(&exercise_id).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let advanced_to = rpro_runner::record_run(&store, &id, &[], passed != 0, advance != 0);
+    jstr(&mut env, &serde_json::json!({ "advanced_to": advanced_to }).to_string())
+}
+
+/// Switch the current exercise OFFLINE (tap a list item). Mirrors /api/select:
+/// validates the id, refuses to un-complete a Done exercise, and gates a
+/// not-yet-reached one unless `force`. Returns `{ "ok": true, "current": id }`
+/// or `{ "error": "unknown|done|locked", "message": ... }`.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_selectExercise<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+    exercise_id: JString<'a>,
+    force: jni::sys::jboolean,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let id: String = env.get_string(&exercise_id).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let exercises = rpro_runner::discover(&store.root().join("exercises")).unwrap_or_default();
+    if !exercises.iter().any(|e| e.meta.id == id) {
+        return jstr(&mut env, &serde_json::json!({ "error": "unknown" }).to_string());
+    }
+    let _ = force; // mobile is the learner's own device — no soft prerequisite gate
+    let mut progress = store.load_progress().unwrap_or_default();
+    if progress.entries.get(&id).map(|e| e.status) == Some(ExerciseStatus::Done) {
+        return jstr(&mut env, &serde_json::json!({ "error": "done",
+            "message": "already completed — reset it to practise again" }).to_string());
+    }
+    progress.select(&id);
+    let _ = store.save_progress(&progress);
+    jstr(&mut env, &serde_json::json!({ "ok": true, "current": id }).to_string())
+}
+
+/// Ensure the seeded store has a Current exercise (the phone store ships no
+/// progress.json → nothing was Current → EVERYTHING showed Locked, incl. the
+/// first exercise). Mirrors rpro-serve's ensure_seeded: if no entry is Current,
+/// make the FIRST exercise Current. Idempotent; call once on startup.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_ensureSeeded<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let exercises = rpro_runner::discover(&store.root().join("exercises")).unwrap_or_default();
+    let mut progress = store.load_progress().unwrap_or_default();
+    let has_current = progress
+        .entries
+        .values()
+        .any(|e| e.status == ExerciseStatus::Current);
+    if !has_current {
+        if let Some(first) = exercises.first() {
+            progress.set_current(&first.meta.id);
+            let _ = store.save_progress(&progress);
+        }
+    }
+    jstr(&mut env, &serde_json::json!({ "ok": true }).to_string())
+}
+
 use rpro_lang::BookRef;
 
 /// The current exercise as /api/current JSON, OFFLINE. Mirrors rpro-serve's

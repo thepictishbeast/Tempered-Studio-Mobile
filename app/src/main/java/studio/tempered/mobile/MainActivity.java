@@ -86,6 +86,16 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void log(String tag, String msg) {
             try { android.util.Log.i("TemperedStudio:" + tag, msg == null ? "" : msg); } catch (Exception e) {}
         }
+
+        /** Record a run outcome OFFLINE (the write-side mobile lacked): mark Done +
+         *  advance on a passing run/test. Returns {"advanced_to": id|null}. */
+        @JavascriptInterface public String recordRun(String id, boolean passed, boolean advance) {
+            try { return Seam.recordRun(storeDir, id, passed, advance); } catch (Exception e) { return "{}"; }
+        }
+        /** Switch the current exercise OFFLINE (tap a list item / jump ahead). */
+        @JavascriptInterface public String selectExercise(String id, boolean force) {
+            try { return Seam.selectExercise(storeDir, id, force); } catch (Exception e) { return "{\"error\":\"seam\"}"; }
+        }
     }
 
     // ── Attempt counting for the hint ladder ────────────────────────────────────
@@ -326,6 +336,9 @@ public class MainActivity extends Activity {
         }
         storeDir = new File(getFilesDir(), "store").getAbsolutePath();
         try { seedStoreFromAssets(); } catch (Exception e) { /* best-effort */ }
+        // The seeded store ships no progress.json → nothing Current → everything
+        // showed Locked (the "first lesson is locked" bug). Set the first Current.
+        try { Seam.ensureSeeded(storeDir); } catch (Exception e) { /* best-effort */ }
 
         web = new WebView(this);
         WebSettings s = web.getSettings();
