@@ -9,6 +9,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -39,6 +40,12 @@ public class MainActivity extends Activity {
     // androidx WebViewAssetLoader). All requests to it are intercepted below.
     private static final String HOST = "appassets.androidplatform.net";
     private static final String BASE = "https://" + HOST + "/";
+    // Termux's RUN_COMMAND is a `dangerous`, Termux-DEFINED permission: declaring
+    // it in the manifest is not enough — Android requires a runtime grant, or every
+    // RUN_COMMAND intent is rejected with "without permission …RUN_COMMAND" (why the
+    // on-device compiler never ran for Paul even after allow-external-apps=true).
+    private static final String TERMUX_PERM = "com.termux.permission.RUN_COMMAND";
+    private static final int RC_TERMUX_PERM = 4711;
 
     private WebView web;
     private String storeDir;
@@ -115,6 +122,16 @@ public class MainActivity extends Activity {
         final boolean explain = "explain".equals(op);
         if (explain) code = code == null ? "" : code.replaceAll("[^A-Za-z0-9]", "");
         else recordAttemptForCurrent(); // every run/check/test = a genuine attempt (hint gate)
+        // Guard: without the runtime RUN_COMMAND grant the intent is silently
+        // rejected. Ask again and tell the user plainly instead of failing cryptically.
+        if (Build.VERSION.SDK_INT >= 23
+            && checkSelfPermission(TERMUX_PERM) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{ TERMUX_PERM }, RC_TERMUX_PERM);
+            deliverTermuxResult(cbId, "", "",
+                "Android needs your OK to let this app run commands in Termux. "
+                + "Tap Allow on the permission dialog, then press Run again.", -1);
+            return;
+        }
         final String action = getPackageName() + ".TERMUX_RESULT." + cbId;
         final BroadcastReceiver rx = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent intent) {
@@ -300,6 +317,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Ask for the Termux RUN_COMMAND grant up front so the on-device compiler
+        // can actually run (see TERMUX_PERM note — a manifest declaration alone
+        // leaves it ungranted and every run is rejected).
+        if (Build.VERSION.SDK_INT >= 23
+            && checkSelfPermission(TERMUX_PERM) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{ TERMUX_PERM }, RC_TERMUX_PERM);
+        }
         storeDir = new File(getFilesDir(), "store").getAbsolutePath();
         try { seedStoreFromAssets(); } catch (Exception e) { /* best-effort */ }
 
