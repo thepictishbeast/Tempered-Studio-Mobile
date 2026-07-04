@@ -96,6 +96,10 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String selectExercise(String id, boolean force) {
             try { return Seam.selectExercise(storeDir, id, force); } catch (Exception e) { return "{\"error\":\"seam\"}"; }
         }
+        /** Re-open a completed exercise to redo it (per-exercise reset). */
+        @JavascriptInterface public String resetExercise(String id) {
+            try { return Seam.resetExercise(storeDir, id); } catch (Exception e) { return "{\"error\":\"seam\"}"; }
+        }
     }
 
     // ── Attempt counting for the hint ladder ────────────────────────────────────

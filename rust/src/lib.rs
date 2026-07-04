@@ -167,6 +167,38 @@ pub extern "system" fn Java_studio_tempered_mobile_Seam_ensureSeeded<'a>(
     jstr(&mut env, &serde_json::json!({ "ok": true }).to_string())
 }
 
+/// Re-open a completed exercise to REDO it OFFLINE (Paul: "reset to redo doesn't
+/// work"; can't re-enter a finished exercise). Mirrors the CLI's reset: the
+/// exercise becomes Current with completed_at cleared + attempts 0 (per-exercise
+/// only — NEVER a reset-all). Demotes any other Current to Locked so the
+/// single-Current invariant holds. Returns `{ "ok": true, "current": id }`.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_resetExercise<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+    exercise_id: JString<'a>,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let id: String = env.get_string(&exercise_id).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let mut progress = store.load_progress().unwrap_or_default();
+    let others: Vec<String> = progress
+        .entries
+        .iter()
+        .filter(|(k, v)| *k != &id && v.status == ExerciseStatus::Current)
+        .map(|(k, _)| k.clone())
+        .collect();
+    for k in others {
+        if let Some(e) = progress.entries.get_mut(&k) {
+            e.status = ExerciseStatus::Locked;
+        }
+    }
+    progress.reset(&id);
+    let _ = store.save_progress(&progress);
+    jstr(&mut env, &serde_json::json!({ "ok": true, "current": id }).to_string())
+}
+
 use rpro_lang::BookRef;
 
 /// The current exercise as /api/current JSON, OFFLINE. Mirrors rpro-serve's

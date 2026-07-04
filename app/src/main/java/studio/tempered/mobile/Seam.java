@@ -50,4 +50,8 @@ public final class Seam {
     /** Ensure a Current exercise exists (the seeded store has no progress.json →
      *  everything showed Locked). Sets the FIRST exercise Current if none is. */
     public static native String ensureSeeded(String storeDir);
+
+    /** Re-open a completed exercise to REDO it (per-exercise only, never a
+     *  reset-all): makes it Current, clears its completion + attempts. */
+    public static native String resetExercise(String storeDir, String id);
 }
