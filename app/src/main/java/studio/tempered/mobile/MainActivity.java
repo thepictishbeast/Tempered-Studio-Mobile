@@ -134,8 +134,12 @@ public class MainActivity extends Activity {
         // exercise — it must not earn hint rungs. Its stdin is a diagnostic
         // code: sanitize to alphanumerics here (and again in bash, belt+braces).
         final boolean explain = "explain".equals(op);
+        // The Sandbox is free-play: compile + run like a normal run (it falls into
+        // the run/test branch below since it is neither "check" nor "explain"), but
+        // it must NEVER count as an exercise attempt or touch the hint gate.
+        final boolean sandbox = "sandbox".equals(op);
         if (explain) code = code == null ? "" : code.replaceAll("[^A-Za-z0-9]", "");
-        else recordAttemptForCurrent(); // every run/check/test = a genuine attempt (hint gate)
+        else if (!sandbox) recordAttemptForCurrent(); // every run/check/test = a genuine attempt (hint gate)
         // Guard: without the runtime RUN_COMMAND grant the intent is silently
         // rejected. Ask again and tell the user plainly instead of failing cryptically.
         if (Build.VERSION.SDK_INT >= 23
