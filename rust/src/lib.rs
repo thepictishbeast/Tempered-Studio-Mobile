@@ -371,3 +371,95 @@ pub extern "system" fn Java_studio_tempered_mobile_Seam_bookChapterJson<'a>(
     };
     jstr(&mut env, &out)
 }
+
+// ── IDE workspace: the file explorer's tree + one-file read, OFFLINE ──────────
+//
+// The web GUI's fullscreen IDE fetches `/api/workspace` (the explorer tree) and
+// `/api/workspace/file?id=…` (open a file). Those were unhandled on the phone
+// (MainActivity fell through to `return null`), so the file explorer was DEAD
+// offline — the exact "everything must work offline" gap Paul called out. These
+// mirror rpro-serve's `workspace_handler` / `workspace_file_handler` byte-for-
+// byte on the success path, keyed by exercise **id** (never a wire path), so the
+// answer-bearing `.toml`s can't be named, listed, or read through this surface.
+//
+// One deliberate difference from the desktop server: NO locked (423) gate — the
+// phone is the learner's own device and the seam's `selectExercise` already
+// drops the soft prerequisite gate for the same reason. The IDE is a progress-
+// neutral workshop, so reading a file here never advances or unlocks anything.
+
+/// `GET /api/workspace` — the explorer tree: every exercise source grouped by
+/// phase directory, in course order, each `{id,name,title,status}`. Always 200.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_workspaceJson<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let exercises = rpro_runner::discover(&store.root().join("exercises")).unwrap_or_default();
+    let progress = store.load_progress().unwrap_or_default();
+    let mut groups: Vec<serde_json::Value> = Vec::new();
+    let mut cur_dir = String::new();
+    let mut cur_files: Vec<serde_json::Value> = Vec::new();
+    for ex in &exercises {
+        let dir = ex
+            .source
+            .parent()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if dir != cur_dir && !cur_files.is_empty() {
+            groups.push(serde_json::json!({ "dir": cur_dir, "files": cur_files }));
+            cur_files = Vec::new();
+        }
+        cur_dir = dir;
+        let status = progress
+            .entries
+            .get(&ex.meta.id)
+            .map_or(ExerciseStatus::Locked, |p| p.status);
+        cur_files.push(serde_json::json!({
+            "id": ex.meta.id,
+            "name": ex.source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            "title": ex.meta.title,
+            "status": status_str(status),
+        }));
+    }
+    if !cur_files.is_empty() {
+        groups.push(serde_json::json!({ "dir": cur_dir, "files": cur_files }));
+    }
+    jstr(&mut env, &serde_json::json!({ "groups": groups }).to_string())
+}
+
+/// `GET /api/workspace/file?id=…` — one exercise source for the IDE editor:
+/// `{id,name,status,content}`. Unknown id → `{"error":"unknown"}` (the caller
+/// maps that to HTTP 400, matching the desktop server). No answer metadata is
+/// ever included, and no `.toml` is ever read here.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_workspaceFileJson<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+    exercise_id: JString<'a>,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let id: String = env.get_string(&exercise_id).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let exercises = rpro_runner::discover(&store.root().join("exercises")).unwrap_or_default();
+    let Some(ex) = exercises.iter().find(|e| e.meta.id == id) else {
+        return jstr(&mut env, &serde_json::json!({ "error": "unknown" }).to_string());
+    };
+    let content = std::fs::read_to_string(&ex.source).unwrap_or_default();
+    let progress = store.load_progress().unwrap_or_default();
+    let status = progress
+        .entries
+        .get(&ex.meta.id)
+        .map_or(ExerciseStatus::Locked, |p| p.status);
+    let out = serde_json::json!({
+        "id": ex.meta.id,
+        "name": ex.source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        "status": status_str(status),
+        "content": content,
+    });
+    jstr(&mut env, &out.to_string())
+}

@@ -54,4 +54,13 @@ public final class Seam {
     /** Re-open a completed exercise to REDO it (per-exercise only, never a
      *  reset-all): makes it Current, clears its completion + attempts. */
     public static native String resetExercise(String storeDir, String id);
+
+    /** The IDE file explorer tree as /api/workspace JSON: every exercise source
+     *  grouped by phase directory, each {id,name,title,status}. Offline. */
+    public static native String workspaceJson(String storeDir);
+
+    /** One exercise source for the IDE editor as /api/workspace/file JSON:
+     *  {id,name,status,content}, or {"error":"unknown"} for an unknown id
+     *  (mapped to HTTP 400 by the caller). No answer metadata is exposed. */
+    public static native String workspaceFileJson(String storeDir, String id);
 }

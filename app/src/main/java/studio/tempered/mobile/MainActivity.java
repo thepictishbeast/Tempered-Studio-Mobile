@@ -388,6 +388,20 @@ public class MainActivity extends Activity {
                         catch (Exception e) { /* default rung 1 */ }
                         return json(Seam.hintJson(storeDir, lvl, attemptsForCurrent()));
                     }
+                    // The IDE file explorer, OFFLINE: the tree (/api/workspace) and
+                    // one-file read (/api/workspace/file?id=…). Both GETs, so they
+                    // work through shouldInterceptRequest (which never sees POST/PUT
+                    // bodies). Without these the file explorer was dead on the phone.
+                    // Check the more specific /file path first.
+                    if (path.endsWith("/api/workspace/file")) {
+                        String id = req.getUrl().getQueryParameter("id");
+                        String body = Seam.workspaceFileJson(storeDir, id == null ? "" : id);
+                        boolean unknown;
+                        try { unknown = new org.json.JSONObject(body).has("error"); }
+                        catch (Exception e) { unknown = true; }
+                        return unknown ? jsonStatus(body, 400, "Bad Request") : json(body);
+                    }
+                    if (path.endsWith("/api/workspace")) return json(Seam.workspaceJson(storeDir));
                     if (path.contains("/api/")) return null; // run/select/etc → gui handles offline
                     // Everything else = the gui/ shell, served from assets.
                     String asset = "gui" + (path.equals("/") ? "/index.html" : path);
@@ -408,6 +422,18 @@ public class MainActivity extends Activity {
         java.util.Map<String, String> h = new java.util.HashMap<>();
         h.put("Access-Control-Allow-Origin", "*");
         r.setResponseHeaders(h);
+        return r;
+    }
+
+    /** JSON with an explicit HTTP status so the WebView's fetch() sees res.status
+     *  (e.g. 400 for an unknown workspace id) exactly as it would from rpro-serve. */
+    private static WebResourceResponse jsonStatus(String body, int code, String reason) {
+        WebResourceResponse r = new WebResourceResponse("application/json", "utf-8",
+            new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+        java.util.Map<String, String> h = new java.util.HashMap<>();
+        h.put("Access-Control-Allow-Origin", "*");
+        r.setResponseHeaders(h);
+        r.setStatusCodeAndReasonPhrase(code, reason);
         return r;
     }
 
