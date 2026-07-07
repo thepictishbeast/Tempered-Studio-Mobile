@@ -180,7 +180,9 @@ values in and out (or cloning everything) is clumsy. The clean answer — lettin
 
 ## 5. Predict-then-run practice (your turn — write this yourself)
 
-Open a fresh playground or `cargo new ownership`. **Predict on paper before each run.**
+Type these in the app's **🧪 Sandbox** (⋯ menu), then take on the matching
+exercises via the **Practice this lesson** links at the bottom. *(On your own
+machine, a playground or `cargo new ownership` works too.)* **Predict on paper before each run.**
 
 1. **Make the move error.** Create a `String`, bind it to a second name, then print the
    *first* name. **Predict** the error code and what the compiler will suggest. Run it.
@@ -221,4 +223,4 @@ me, and I'll pitch Lesson 16 (references & borrowing) to match.
 ---
 
 <!-- lesson-nav -->
-[← Lesson 14 — `Vec` and `HashMap`](14-vec-hashmap.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 16 — References & Borrowing →](16-references-and-borrowing.md)
+[← Lesson 14 — `Vec` and `HashMap`](14-vec-hashmap.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 16 — Shared references →](16-shared-references.md)

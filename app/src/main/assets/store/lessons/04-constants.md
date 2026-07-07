@@ -79,7 +79,8 @@ This is the one rule to carry away: **a `const` always needs its type written ou
 
 ## 5. Predict-then-run practice (your turn — write this yourself)
 
-`cargo new constants`. Predict before each run:
+Type these in the app's **🧪 Sandbox** (⋯ menu). *(On your own machine,
+`cargo new constants` works too.)* Predict before each run:
 
 1. Declare a `const` of your own **above** `main` (SCREAMING_SNAKE_CASE, with a
    type — pick `u32` or `i32`). Print it. Predict the line first.
@@ -97,7 +98,7 @@ This is the one rule to carry away: **a `const` always needs its type written ou
 Did you expect `const` to require the type when `let` doesn't? Did anything about
 SCREAMING_SNAKE_CASE or the top-of-file placement feel odd? Tell me — next we leave
 the "naming values" group behind and start on the **kinds** of values themselves
-(Lesson 5: number types and a famous overflow surprise).
+(Lesson 5: the scalar types — and then, in 5b, a famous overflow surprise).
 
 ## 7. Sources
 
@@ -109,4 +110,4 @@ the "naming values" group behind and start on the **kinds** of values themselves
 ---
 
 <!-- lesson-nav -->
-[← Lesson 3 — Shadowing](03-shadowing.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 5 — Number types (and a famous overflow surprise) →](05-number-types-and-overflow.md)
+[← Lesson 3 — Shadowing](03-shadowing.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 5 — The scalar types →](05-scalar-types.md)

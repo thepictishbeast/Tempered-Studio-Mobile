@@ -64,30 +64,18 @@ fn main() {
 hello / world
 ```
 
-**A function that returns a slice (you read this one).** It hands back a `&str` that views
-part of its argument:
-
-```rust
-fn first_word(s: &str) -> &str {
-    let bytes = s.as_bytes();   // the raw bytes of the text, as a &[u8] slice
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b' ' {   // b' ' is the byte value of a space
-            return &s[0..i];     // slice up to the first space
-        }
-        i += 1;
-    }
-    s   // no space found → the whole string is the first word
-}
-fn main() {
-    let sentence = String::from("hello world");
-    println!("first word: {}", first_word(&sentence));
-}
-```
+**A function that returns a slice.** The Book's signature example is a function that finds
+the first word of some text. What matters here is its *shape*:
 
 ```
-first word: hello
+fn first_word(s: &str) -> &str
 ```
+
+It takes a view and hands back a **slice of that same text** — `first_word(&sentence)`
+returns a `&str` that *borrows* `sentence`. (The scanning implementation inside is a lovely
+read — Book §4.3 walks it byte by byte; you don't need it for this lesson's point. And note
+you can pass `&sentence` — a borrowed `String` — where a `&str` is wanted: Rust quietly
+bridges that gap for you, with the machinery explained in Lesson 29.)
 
 The returned `&str` borrows `sentence` — which is exactly what makes the next part safe.
 
@@ -149,7 +137,8 @@ error[E0502]: cannot borrow `v` as mutable because it is also borrowed as immuta
 
 ## 5. Predict-then-run practice (your turn — write this yourself)
 
-Open a fresh playground or `cargo new slices`. **Predict on paper before each run.**
+Type these in the app's **🧪 Sandbox** (⋯ menu). *(On your own machine, a
+playground or `cargo new slices` works too.)* **Predict on paper before each run.**
 
 1. **Safe slices.** Make a `String`, take two `&str` slices of different parts, and print
    both *before* changing anything. **Predict** the output; confirm it compiles.
@@ -187,4 +176,4 @@ me, and I'll shape the Phase-4 review around it.
 ---
 
 <!-- lesson-nav -->
-[← Lesson 16 — References & Borrowing](16-references-and-borrowing.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 18 — Structs (your own types) →](18-structs.md)
+[← Lesson 16b — Mutable references & the borrowing rules](16b-mutable-references.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 18 — Structs: bundle your data →](18-defining-structs.md)

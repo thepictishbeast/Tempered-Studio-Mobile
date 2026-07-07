@@ -171,7 +171,9 @@ cause: **the shortcut only exists where it was written.** The fix is to put a `u
 
 ## 5. Predict-then-run practice (your turn — write this yourself)
 
-Open a fresh playground or `cargo new use_practice`. **Predict on paper before each run.**
+Type these in the app's **🧪 Sandbox** (⋯ menu), then take on the matching
+exercises via the **Practice this lesson** links at the bottom. *(On your own
+machine, a playground or `cargo new use_practice` works too.)* **Predict on paper before each run.**
 
 1. **Shorten a path.** Reuse your L22 tree (`mod garden { pub mod flowers { pub fn plant()
    {…} } }`). Add a `use` so you can call `flowers::plant()` instead of the full path.
@@ -211,4 +213,4 @@ arbitrary or sensible? Tell me, and I'll shape the Phase-6 review around it.
 ---
 
 <!-- lesson-nav -->
-[← Lesson 22 — Paths & Visibility (`pub`)](22-paths-and-visibility.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 24 — Generics: `<T>` type parameters →](24-generics.md)
+[← Lesson 22 — Paths & Visibility (`pub`)](22-paths-and-visibility.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 24 — Generic functions: the `<T>` placeholder →](24-generic-functions.md)

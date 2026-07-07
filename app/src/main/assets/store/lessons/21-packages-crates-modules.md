@@ -172,7 +172,8 @@ exists, you *refer* to it with a path, you don't `mod` it a second time.)
 
 ## 5. Predict-then-run practice (your turn — write this yourself)
 
-Open a fresh playground or `cargo new modules_practice`. **Predict on paper before each run.**
+Type these in the app's **🧪 Sandbox** (⋯ menu). *(On your own machine, a
+playground or `cargo new modules_practice` works too.)* **Predict on paper before each run.**
 
 1. **Two modules, one call each.** Write modules `english` and `spanish`, each with a
    `pub fn greet()` that prints a different greeting. Call both from `main`. **Predict** the
@@ -216,4 +217,4 @@ folders) help — or did "`mod` is not `include`" trip you up? Tell me, and I'll
 ---
 
 <!-- lesson-nav -->
-[← Lesson 20 — Error Handling: `Result`, `?`, `panic!`](20-error-handling.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 22 — Paths & Visibility (`pub`) →](22-paths-and-visibility.md)
+[← Lesson 20c — The ? operator](20c-question-mark.md) · [↑ Study Guide](../STUDY-GUIDE.md) · [Lesson 22 — Paths & Visibility (`pub`) →](22-paths-and-visibility.md)
