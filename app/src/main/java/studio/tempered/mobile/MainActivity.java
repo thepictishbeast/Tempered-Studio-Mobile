@@ -443,11 +443,29 @@ public class MainActivity extends Activity {
         try { want = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
         catch (Exception e) { want = "unknown"; }
         if (marker.exists() && want.equals(readFile(marker))) return;
-        copyAsset(getAssets(), "store", new File(getFilesDir(), "store"));
+        // SYNC the read-only reference dirs before copying (mirrors the desktop
+        // server's ensure_seeded): a content update can REMOVE or RENAME a file —
+        // e.g. a lesson split replaces one .md with two — and an overlay copy
+        // would leave the old file behind as a ghost entry in the lesson list.
+        // Progress/state files live in the store root (not bundled) and the
+        // exercises dir stays overlay-copied, so neither is touched.
+        File store = new File(getFilesDir(), "store");
+        for (String sub : new String[] { "lessons", "quizzes", "cheatsheets", "book", "glossary" }) {
+            deleteRecursively(new File(store, sub));
+        }
+        copyAsset(getAssets(), "store", store);
         marker.getParentFile().mkdirs();
         try (OutputStream out = new FileOutputStream(marker)) {
             out.write(want.getBytes(StandardCharsets.UTF_8));
         }
+    }
+
+    private void deleteRecursively(File f) {
+        if (f == null || !f.exists()) return;
+        File[] kids = f.listFiles();
+        if (kids != null) for (File k : kids) deleteRecursively(k);
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
     }
 
     private void copyAsset(AssetManager am, String path, File dest) throws Exception {
