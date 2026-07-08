@@ -88,6 +88,31 @@ pub extern "system" fn Java_studio_tempered_mobile_Seam_exercisesJson<'a>(
     jstr(&mut env, &out)
 }
 
+/// The spaced-repetition review queue OFFLINE. Mirrors rpro-serve's
+/// review_handler exactly — reads the SAME `progress.reviews` (shared
+/// rpro-state) the on-device recordRun already populates when a learner
+/// overcomes an error code — so the gui's RECALL chips work on the phone
+/// (they never showed before: `/api/review` fell through to null). Returns
+/// `{ "due": [codes], "mastered": n, "tracked": n }`.
+#[no_mangle]
+pub extern "system" fn Java_studio_tempered_mobile_Seam_reviewJson<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    store_dir: JString<'a>,
+) -> jstring {
+    let dir: String = env.get_string(&store_dir).map(|s| s.into()).unwrap_or_default();
+    let store = Store::at(PathBuf::from(dir));
+    let progress = store.load_progress().unwrap_or_default();
+    let r = &progress.reviews;
+    let out = serde_json::json!({
+        "due": r.due(),
+        "mastered": r.mastered_count(),
+        "tracked": r.tracked_count(),
+    })
+    .to_string();
+    jstr(&mut env, &out)
+}
+
 /// Record a run's outcome OFFLINE (the write-side that mobile lacked → the
 /// "lockout"). Mirrors what rpro-serve's /api/run does server-side: mark the
 /// exercise Done + advance Current to the next when `advance` (a passing

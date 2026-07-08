@@ -19,6 +19,9 @@ public final class Seam {
     /** The exercise curriculum as /api/exercises JSON, read offline from a seeded store dir. */
     public static native String exercisesJson(String storeDir);
 
+    /** The spaced-repetition review queue as /api/review JSON ({due,mastered,tracked}), offline. */
+    public static native String reviewJson(String storeDir);
+
     /** The current exercise as /api/current JSON (first exercise if none is Current). */
     public static native String currentJson(String storeDir);
 

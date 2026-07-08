@@ -470,6 +470,7 @@ public class MainActivity extends Activity {
                     // Read-only API → answered by the on-device seam.
                     if (path.endsWith("/api/exercises")) return json(Seam.exercisesJson(storeDir));
                     if (path.endsWith("/api/current"))   return json(Seam.currentJson(storeDir));
+                    if (path.endsWith("/api/review"))    return json(Seam.reviewJson(storeDir));
                     if (path.endsWith("/api/book")) {
                         String bq = req.getUrl().getQueryParameter("q");
                         if (bq != null && !bq.trim().isEmpty()) return json(bookSearchJson(bq));
