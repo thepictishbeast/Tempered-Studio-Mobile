@@ -308,10 +308,13 @@
   .ide-file-new:hover, .ide-file-new:focus-visible { background:var(--bg-3); border-color:var(--accent); color:var(--fg); outline:none; }
   .ide-empty { color:var(--fg-dim); font-size:12.5px; padding:14px 4px; }
   /* Explorer filter box — jump to any file by name across all phases. */
-  .ide-filterwrap { padding:0 0 8px; }
-  .ide-filter { width:100%; box-sizing:border-box; background:var(--bg-2); color:var(--fg); border:1px solid var(--line);
+  .ide-filterwrap { display:flex; gap:6px; align-items:stretch; padding:0 0 8px; }
+  .ide-filter { flex:1 1 auto; min-width:0; box-sizing:border-box; background:var(--bg-2); color:var(--fg); border:1px solid var(--line);
     border-radius:8px; padding:6px 9px; font:inherit; font-size:12px; }
   .ide-filter:focus { outline:none; border-color:var(--accent); }
+  .ide-foldall { flex:0 0 auto; background:var(--bg-2); color:var(--fg-dim); border:1px solid var(--line); border-radius:8px;
+    padding:0 9px; cursor:pointer; font-size:12px; line-height:1; }
+  .ide-foldall:hover, .ide-foldall:focus-visible { color:var(--fg); border-color:var(--accent); outline:none; }
   .ide-file.filter-hide, .ide-group.filter-hide { display:none; }
   /* While filtering, matching groups reveal their rows regardless of fold state. */
   .ide-treelist.filtering .ide-group.filter-open .ide-grp-body { display:block; }
@@ -428,7 +431,12 @@
   /* Roadmap tab: the learner's curriculum journey (a card per phase) */
   .docview .roadintro { color:var(--fg-dim); margin:0 0 18px; max-width:70ch; }
   .docview .roadphase { margin:0 0 14px; padding:12px 16px; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; }
-  .docview .roadphase h2 { font-size:15px; margin:0 0 8px; }
+  .docview .roadphase h2 { display:flex; align-items:center; gap:10px; font-size:15px; margin:0 0 8px; }
+  .docview .roadprog { display:inline-flex; align-items:center; gap:7px; margin-left:auto; font-size:11px; font-weight:600; color:var(--fg-dim); flex:0 0 auto; }
+  .docview .roadprog-bar { width:54px; height:6px; border-radius:999px; background:var(--bg-3); border:1px solid var(--line); overflow:hidden; }
+  .docview .roadprog-bar i { display:block; height:100%; width:0; border-radius:999px; background:linear-gradient(90deg,var(--accent),#ffb37a); transition:width .6s cubic-bezier(.2,.8,.3,1); }
+  .docview .roadprog.done { color:#36c46b; }
+  @media (prefers-reduced-motion: reduce) { .docview .roadprog-bar i { transition:none; } }
   .docview .roadlessons { margin:0; padding-left:20px; }
   .docview .roadlessons li { padding:2px 0; font-size:13.5px; }
   .docview .roadlessons a { color:var(--fg); text-decoration:none; }
@@ -449,6 +457,14 @@
   .bshit-flash { background:rgba(247,76,0,.18); border-radius:4px; transition:background 1.4s ease; }
   .booktoc { list-style:none; padding:0; } .booktoc li { margin:3px 0; }
   .booktoc a { font-size:13.5px; } .booktoc small { margin-left:8px; }
+  /* Lesson full-text search results (matches in the BODY, not just the title). */
+  .docview .lessonbodyhits { margin-top:14px; border-top:1px solid var(--line); padding-top:4px; }
+  .docview .lessonbodyhits .lbh-h { font-size:11px; color:var(--fg-dim); text-transform:uppercase; letter-spacing:.05em; font-weight:700; margin:8px 0 4px; }
+  .docview .lbh-list { list-style:none; padding:0; margin:0; }
+  .docview .lbh-list li { padding:5px 2px; border-bottom:1px solid var(--line); }
+  .docview .lbh-list a { font-size:13.5px; color:var(--fg); text-decoration:none; }
+  .docview .lbh-list a:hover { color:var(--accent); text-decoration:underline; }
+  .docview .lbh-list small { display:block; margin:2px 0 0; color:var(--fg-dim); font-size:12px; }
   /* Book chapter prev/next nav (linear reading) — two cards, prev left / next right. */
   .booknav { display:flex; gap:10px; margin:22px 0 4px; }
   .booknav a { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:2px; text-decoration:none;
@@ -776,8 +792,13 @@
     17%{transform:translateX(-50%) scale(1)}
     82%{opacity:1;transform:translateX(-50%) scale(1)}
     100%{opacity:0;transform:translateX(-50%) scale(.96)}}
+  /* Bigger, GOLD variant for a phase-completion milestone (a whole topic done). */
+  #celebrate.milestone{border-color:#e0a92e;background:linear-gradient(160deg,var(--bg-2),rgba(224,169,46,.15));padding:15px 26px}
+  #celebrate.milestone .cg-h{color:#e0a92e;font-size:19px}
+  #celebrate.milestone.show{animation:celebpop 3.6s ease forwards}
   @media (prefers-reduced-motion: reduce){
     #celebrate.show{animation:celebfade 2.6s ease forwards}
+    #celebrate.milestone.show{animation:celebfade 3.6s ease forwards}
     @keyframes celebfade{0%{opacity:0}8%{opacity:1}82%{opacity:1}100%{opacity:0}}}
   /* 🩺 Logs view */
   .docview .logbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
@@ -1350,9 +1371,35 @@
       c.innerHTML = '<div class="cg-h">🎉 Exercise complete!</div>'
         + (nextId ? '<div class="cg-s">Next up: ' + esc(nextTitle || nextId) + '</div>'
                   : '<div class="cg-s">That was the last one — nice work.</div>');
-      c.classList.remove('show'); void c.offsetWidth; // restart the CSS animation
+      c.classList.remove('show', 'milestone'); void c.offsetWidth; // restart the CSS animation
       c.classList.add('show');
       clearTimeout(celebrate._t); celebrate._t = setTimeout(() => c.classList.remove('show'), 2600);
+    }
+    // Milestone: finishing the LAST exercise of a phase is a bigger moment than one
+    // exercise. If the just-completed exercise's phase is now fully done (and we
+    // haven't celebrated it before), show a gold "Phase complete!" instead of the
+    // usual popup. Detection is client-side from the exercises list already in hand
+    // (phase = id prefix); dedupe in localStorage so re-runs don't re-fire.
+    const PHASE_CELEB_KEY = 'ts-phase-celebrated';
+    function maybeCelebratePhase(exs, phase) {
+      if (!phase || !exs) return false;
+      const inPhase = ((exs.exercises) || []).filter(e => String(e.id).split('/')[0] === phase);
+      if (!inPhase.length || !inPhase.every(e => e.status === 'done')) return false;
+      let seen; try { seen = new Set(JSON.parse(localStorage.getItem(PHASE_CELEB_KEY) || '[]')); } catch (_) { seen = new Set(); }
+      if (seen.has(phase)) return false;
+      seen.add(phase); try { localStorage.setItem(PHASE_CELEB_KEY, JSON.stringify([...seen])); } catch (_) {}
+      celebratePhase(phase);
+      return true;
+    }
+    function celebratePhase(phase) {
+      const name = String(phase).replace(/-/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+      let c = document.getElementById('celebrate');
+      if (!c) { c = document.createElement('div'); c.id = 'celebrate'; c.setAttribute('role', 'status'); c.setAttribute('aria-live', 'polite'); document.body.appendChild(c); }
+      c.innerHTML = '<div class="cg-h">🏆 Phase complete!</div>'
+        + '<div class="cg-s">You finished <b>' + esc(name) + '</b> — every exercise done. On to the next topic!</div>';
+      c.classList.remove('show', 'milestone'); void c.offsetWidth;
+      c.classList.add('show', 'milestone');
+      clearTimeout(celebrate._t); celebrate._t = setTimeout(() => c.classList.remove('show', 'milestone'), 3600);
     }
     async function copyText(s) {
       s = s == null ? '' : String(s);
@@ -1779,7 +1826,7 @@
         + '<div class="ide-body">'
         +   '<div class="ide-scrim" id="idescrim"></div>'
         +   '<aside class="ide-sidebar" id="idetree" aria-label="File explorer">'
-        +     '<div class="ide-filterwrap"><input id="idefilter" class="ide-filter" type="search" placeholder="🔎 Filter files…" aria-label="Filter files by name" autocomplete="off" autocapitalize="off" spellcheck="false"></div>'
+        +     '<div class="ide-filterwrap"><input id="idefilter" class="ide-filter" type="search" placeholder="🔎 Filter files…" aria-label="Filter files by name" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="idefoldall" class="ide-foldall" type="button" title="Collapse all phases" aria-label="Collapse or expand all phases">▾</button></div>'
         +     '<div class="ide-treelist" id="idetreelist"><div class="ide-empty">Loading files…</div></div>'
         +   '</aside>'
         +   '<div class="ide-main">'
@@ -1799,6 +1846,7 @@
         + '</div>';
       document.getElementById('idefilesbtn').onclick = () => ideSetSidebar(document.getElementById('idetree').classList.contains('closed'));
       { const flt = document.getElementById('idefilter'); if (flt) { flt.oninput = () => ideFilterTree(flt.value); flt.onkeydown = e => { if (e.key === 'Escape') { flt.value = ''; ideFilterTree(''); } }; } }
+      { const fa = document.getElementById('idefoldall'); if (fa) fa.onclick = () => ideFoldAll(); }
       document.getElementById('idetermbtn').onclick = () => ideSetTerm(document.getElementById('ideterm').classList.contains('closed'));
       document.getElementById('idescrim').onclick = () => ideSetSidebar(false);
       const full = document.getElementById('idefull');
@@ -1844,6 +1892,7 @@
     // that folds its body. Returns { g, body } for the caller to fill with rows.
     function ideMakeGroup(key, label, count, collapsed) {
       const g = document.createElement('div'); g.className = 'ide-group' + (collapsed ? ' collapsed' : '');
+      g.dataset.gkey = key; // persistence key, so "fold all" can update every group
       const h = document.createElement('button'); h.type = 'button'; h.className = 'ide-group-h';
       h.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       h.innerHTML = '<span class="ide-grp-chev" aria-hidden="true">▾</span>'
@@ -1919,6 +1968,7 @@
       // If a filter is active (e.g. the tree re-rendered after a scratch add), re-apply it.
       const flt = document.getElementById('idefilter');
       if (flt && flt.value.trim()) ideFilterTree(flt.value);
+      ideSyncFoldAll(); // point the fold-all button at its next action
     }
     // Live filter over the whole tree by file name: matching rows show (their
     // group forced open regardless of fold state), non-matching rows + empty
@@ -1945,6 +1995,31 @@
         g.classList.toggle('filter-hide', !anyMatch);   // hide phases with no match
         g.classList.toggle('filter-open', anyMatch);    // reveal matches even if folded
       });
+    }
+    // One-click fold/unfold of EVERY phase: if any group is open, collapse them
+    // all; otherwise expand them all. Persists each group's key so the choice
+    // sticks, and re-labels the button to its next action.
+    function ideFoldAll() {
+      const list = document.getElementById('idetreelist'); if (!list) return;
+      const groups = [...list.querySelectorAll('.ide-group')];
+      const collapse = groups.some(g => !g.classList.contains('collapsed')); // any open → collapse all
+      const s = ideGroupsState();
+      groups.forEach(g => {
+        g.classList.toggle('collapsed', collapse);
+        const h = g.querySelector('.ide-group-h');
+        if (h) { h.setAttribute('aria-expanded', collapse ? 'false' : 'true'); }
+        if (g.dataset.gkey) s[g.dataset.gkey] = collapse;
+      });
+      ideGroupsSave(s);
+      ideSyncFoldAll();
+    }
+    // Point the fold-all button at its NEXT action based on current state.
+    function ideSyncFoldAll() {
+      const fa = document.getElementById('idefoldall'); if (!fa) return;
+      const groups = [...document.querySelectorAll('#idetreelist .ide-group')];
+      const anyOpen = groups.some(g => !g.classList.contains('collapsed'));
+      fa.textContent = anyOpen ? '▾' : '▸';
+      fa.title = anyOpen ? 'Collapse all phases' : 'Expand all phases';
     }
 
     // ── Runnable code examples in lessons/book ──────────────────────────────────
@@ -2090,13 +2165,15 @@
           const rec = JSON.parse(AndroidSeam.recordRun(curExercise, passed, passed && termuxOp !== 'check'));
           advancedTo = rec && rec.advanced_to;
         } catch (_) {}
-        try { const exs = await fetch('api/exercises').then(r => r.json()); if (exs) renderList(exs); } catch (_) {}
+        let exsData = null;
+        try { exsData = await fetch('api/exercises').then(r => r.json()); if (exsData) renderList(exsData); } catch (_) {}
+        const completedPhase = curExercise ? String(curExercise).split('/')[0] : null;
         if (advancedTo) {
           let nextTitle = null;
           try { const cur = await fetch('api/current').then(r => r.json()); renderCurrent(cur); nextTitle = cur && cur.title; } catch (_) {}
           term.writeln(''); term.writeln(g('✓ exercise complete — advancing to ' + (nextTitle || advancedTo)));
           statusEl().textContent = 'advanced ✓';
-          celebrate(advancedTo, nextTitle);
+          if (!maybeCelebratePhase(exsData, completedPhase)) celebrate(advancedTo, nextTitle);
         }
       }
       // Gate ONCE per exercise (Paul): the prediction persists after a run so you
@@ -2158,14 +2235,18 @@
         statusEl().textContent = out.passed ? 'passed' : 'failed';
         // Refresh the list/gauge/attempts after every run; if a pass advanced
         // the learner, load the next exercise into the editor.
-        try { const exs = await fetch('api/exercises').then(r => r.json()); if (exs) renderList(exs); } catch (_) {}
+        let exsData = null;
+        try { exsData = await fetch('api/exercises').then(r => r.json()); if (exsData) renderList(exsData); } catch (_) {}
+        // Capture the completed exercise's phase BEFORE renderCurrent overwrites curExercise.
+        const completedPhase = curExercise ? String(curExercise).split('/')[0] : null;
         try { const rev = await fetch('api/review').then(r => r.json()); renderReview(rev); } catch (_) {}
         if (out.advanced_to) {
           let nextTitle = null;
           try { const cur = await fetch('api/current').then(r => r.json()); renderCurrent(cur); nextTitle = cur && cur.title; } catch (_) {}
           term.writeln(''); term.writeln(g('✓ exercise complete — advancing to ' + (nextTitle || out.advanced_to)));
           statusEl().textContent = 'advanced ✓';
-          celebrate(out.advanced_to, nextTitle);
+          // A completed phase is the bigger moment — else the usual exercise popup.
+          if (!maybeCelebratePhase(exsData, completedPhase)) celebrate(out.advanced_to, nextTitle);
         }
       } catch (e) {
         logEvent('net', 'info', 'local /api/run unavailable (' + (e && e.message || e) + ') — routing to on-device path');
@@ -3380,7 +3461,12 @@
           return `<li${isRead ? ' class="read"' : ''}>${isRead ? '<span class="readmark">✓</span>' : ''}<a href="#" class="lessonjump" data-id="${esc(l.id)}">${esc(l.title)}</a></li>`;
         }).join('');
         const nRead = g.lessons.filter(l => read.has(l.id)).length;
-        const badge = nRead ? `<span class="readbadge">${nRead}/${g.lessons.length} read${nRead === g.lessons.length ? ' ✓' : ''}</span>` : '';
+        // An always-present per-stage progress bar (fills on render) — the journey
+        // is measurable from day one, and each stage visibly fills as you read it.
+        const total = g.lessons.length, pctW = Math.round((nRead / total) * 100), done = nRead === total;
+        const badge = `<span class="roadprog${done ? ' done' : ''}" title="${nRead} of ${total} lessons read">`
+          + `<span class="roadprog-bar"><i data-pct="${pctW}" style="width:0"></i></span>`
+          + `<span class="roadprog-n">${nRead}/${total}${done ? ' ✓' : ''}</span></span>`;
         const bk = phaseBook(g.phase);
         const links = `<a href="#" class="cheatlink" data-cheat="${esc(g.phase)}">📋 Cheatsheet</a>`
           + ` · <a href="#" class="quizlink" data-quiz="${esc(g.phase)}">❓ Quiz${quizDone.has(g.phase) ? ' <span class="qzdone">✓</span>' : ''}</a>`
@@ -3389,6 +3475,10 @@
           + `<ul class="roadlessons">${lis}</ul><p class="roadlinks">${links}</p></section>`;
       }).join('');
       d.innerHTML = head + intro + body;
+      // Animate each stage bar from 0 → its read %, so the journey "fills up"
+      // as the view opens (snaps instantly under prefers-reduced-motion via CSS).
+      d.querySelectorAll('.roadprog-bar i').forEach(i =>
+        requestAnimationFrame(() => { i.style.width = (i.dataset.pct || 0) + '%'; }));
       d.querySelectorAll('.lessonjump').forEach(a =>
         a.onclick = e => { e.preventDefault(); showView('lessons', a.dataset.id); });
       d.querySelectorAll('.cheatlink').forEach(a =>
@@ -3760,13 +3850,13 @@
         // A type-to-filter box (only worth showing past a handful of lessons) —
         // find a topic instantly instead of scrolling the whole curriculum.
         const filter = items.length > 8
-          ? `<input class="lessonfilter" type="search" placeholder="🔍 Filter lessons…" aria-label="Filter lessons by title" autocomplete="off">`
+          ? `<input class="lessonfilter" type="search" placeholder="🔍 Search lessons — title or text…" aria-label="Search lessons by title or full text" autocomplete="off">`
           : '';
         d.innerHTML = '<h1>🎓 Lessons' + (nRead ? `<span class="readbadge">${nRead} of ${items.length} read</span>` : '') + '</h1>'
           + `<p style="color:var(--fg-dim)">The Patina curriculum — ${items.length} lessons for absolute beginners. Read a lesson, then switch to Practice to write it. Fully offline.</p>`
           + cta + filter
           + (items.length
-            ? lessonStagesHtml(items, read) + '<p class="lessonnomatch" hidden>No lessons match — clear the filter to see them all.</p>'
+            ? lessonStagesHtml(items, read) + '<div class="lessonbodyhits" hidden></div><p class="lessonnomatch" hidden>No lessons match — clear the search to see them all.</p>'
             : '<p>no lessons seeded — run the server with the bundled lessons/.</p>');
         d.querySelector('.continuecta')?.addEventListener('click', function () { renderLessons(this.dataset.id); });
         d.querySelectorAll('.lessonjump').forEach(a =>
@@ -3776,13 +3866,41 @@
           const lis = [...d.querySelectorAll('.booktoc li')];
           const secs = [...d.querySelectorAll('.lstage')];
           const nm = d.querySelector('.lessonnomatch');
+          const bh = d.querySelector('.lessonbodyhits');
+          let bhT = null, bhSeq = 0;
           fi.addEventListener('input', () => {
             const q = fi.value.trim().toLowerCase();
-            let shown = 0;
-            lis.forEach(li => { const m = !q || li.dataset.title.includes(q); li.hidden = !m; if (m) shown++; });
-            // collapse a whole stage when none of its lessons match
+            // 1. Instant client-side TITLE filter (unchanged) — collect what it shows.
+            let shown = 0; const shownIds = new Set();
+            lis.forEach(li => {
+              const m = !q || li.dataset.title.includes(q);
+              li.hidden = !m;
+              if (m) { shown++; const a = li.querySelector('.lessonjump'); if (a) shownIds.add(a.dataset.id); }
+            });
             secs.forEach(s => { s.hidden = ![...s.querySelectorAll('li')].some(li => !li.hidden); });
-            if (nm) nm.hidden = shown !== 0;
+            // 2. Debounced FULL-TEXT body search (server ?q=): surfaces lessons whose
+            //    text — not just title — matches. Falls back gracefully on an older
+            //    APK whose server ignores ?q= (no `hits` key → title filter only).
+            clearTimeout(bhT);
+            if (!bh || !q) { if (bh) { bh.hidden = true; bh.innerHTML = ''; } if (nm) nm.hidden = shown !== 0; return; }
+            const seq = ++bhSeq;
+            bhT = setTimeout(async () => {
+              let data = null;
+              try { data = await fetch('api/lessons?q=' + encodeURIComponent(q)).then(r => r.json()); } catch (_) {}
+              if (seq !== bhSeq) return; // a newer keystroke won
+              const hits = data && Array.isArray(data.hits) ? data.hits : null;
+              const extra = hits ? hits.filter(h => !shownIds.has(h.id)) : [];
+              bh.innerHTML = extra.length
+                ? '<h2 class="lbh-h">📄 Also found in the text of</h2><ul class="lbh-list">'
+                  + extra.map(h => `<li><a href="#" class="lessonjump" data-id="${esc(h.id)}">${esc(h.title)}`
+                    + `<span class="bscount">${h.count | 0}</span></a><small>${esc(h.snippet)}</small></li>`).join('')
+                  + '</ul>'
+                : '';
+              bh.hidden = extra.length === 0;
+              bh.querySelectorAll('.lessonjump').forEach(a =>
+                a.onclick = e => { e.preventDefault(); renderLessons(a.dataset.id); });
+              if (nm) nm.hidden = shown !== 0 || extra.length > 0;
+            }, 200);
           });
         }
         d.scrollTop = 0;

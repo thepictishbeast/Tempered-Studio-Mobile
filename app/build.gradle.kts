@@ -14,8 +14,8 @@ android {
         // saw "v0.1 installed" forever and update detection never converged.
         // Dev builds toward v0.4 take 10315+ (10400/"0.4.0" is RESERVED for the
         // eventual great-v0.4 STABLE); prereleases so Obtainium can grab them.
-        versionCode = 10356
-        versionName = "0.4.0-dev.42"
+        versionCode = 10357
+        versionName = "0.4.0-dev.43"
     }
     buildTypes {
         release {
