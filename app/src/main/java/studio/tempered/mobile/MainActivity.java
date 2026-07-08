@@ -357,6 +357,57 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * A book chapter's title: the first heading of ANY level ({@code #}…{@code ######}),
+     * stripped of its leading hashes. Matches rpro-book's Chapter::title (the book's
+     * chapters lead with {@code ## }, so the lesson-style "# "-only mdTitle would miss
+     * them and fall back to the id). Falls back to {@code fallback} when there's none.
+     */
+    static String bookTitle(String md, String fallback) {
+        for (String line : md.split("\n")) {
+            String t = line.replaceAll("^\\s+", "");
+            if (t.startsWith("#")) {
+                String title = t.replaceAll("^#+", "").trim();
+                if (!title.isEmpty()) return title;
+            }
+        }
+        return fallback;
+    }
+
+    /**
+     * Full-text search over the bundled Rust Book chapters — the on-device mirror of
+     * the desktop /api/book?q= (rpro_book::Book::search). Returns {"hits":[{chapter,
+     * title,count,snippet}]} ranked by match count, the SAME shape the gui's
+     * runBookSearch renders (data-ch = chapter). Pure Java over the seeded .md — no
+     * seam call — so the Book search box works fully offline on the phone.
+     */
+    private String bookSearchJson(String q) {
+        File[] files = new File(storeDir, "book").listFiles((d, n) -> n.endsWith(".md"));
+        if (files == null) files = new File[0];
+        java.util.Arrays.sort(files, java.util.Comparator.comparing(File::getName));
+        String needle = q.trim().toLowerCase();
+        java.util.List<Object[]> hits = new java.util.ArrayList<>();
+        for (File f : files) {
+            String md = readFile(f);
+            if (md == null) continue;
+            int count = countOccurrences(md.toLowerCase(), needle);
+            if (count == 0) continue;
+            String stem = f.getName().substring(0, f.getName().length() - 3);
+            String obj = "{\"chapter\":" + jstr(stem)
+                    + ",\"title\":" + jstr(bookTitle(md, stem))
+                    + ",\"count\":" + count
+                    + ",\"snippet\":" + jstr(mdSnippet(md, needle)) + "}";
+            hits.add(new Object[] { count, obj });
+        }
+        hits.sort((a, b) -> Integer.compare((int) b[0], (int) a[0]));
+        StringBuilder sb = new StringBuilder("{\"hits\":[");
+        for (int i = 0; i < hits.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append((String) hits.get(i)[1]);
+        }
+        return sb.append("]}").toString();
+    }
+
+    /**
      * The glossary, pre-converted to {"terms":[…]} JSON at build time
      * (build-apk.sh; parsing TOML in Java isn't worth it). No term → the whole
      * document; ?term=X → {"term":<match|null>}, matched by name, then alias,
@@ -420,6 +471,8 @@ public class MainActivity extends Activity {
                     if (path.endsWith("/api/exercises")) return json(Seam.exercisesJson(storeDir));
                     if (path.endsWith("/api/current"))   return json(Seam.currentJson(storeDir));
                     if (path.endsWith("/api/book")) {
+                        String bq = req.getUrl().getQueryParameter("q");
+                        if (bq != null && !bq.trim().isEmpty()) return json(bookSearchJson(bq));
                         String ch = req.getUrl().getQueryParameter("chapter");
                         return json(ch != null ? Seam.bookChapterJson(storeDir, ch) : Seam.bookTocJson(storeDir));
                     }
