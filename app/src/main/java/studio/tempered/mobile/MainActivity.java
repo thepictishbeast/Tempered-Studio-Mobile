@@ -265,10 +265,37 @@ public class MainActivity extends Activity {
      * `id` is only ever COMPARED against real file stems — never joined onto a
      * path — so a traversal value simply finds no match.
      */
-    private String mdCollection(String subdir, String listKey, String itemKey, String id) {
+    private String mdCollection(String subdir, String listKey, String itemKey, String id, String q) {
         File[] files = new File(storeDir, subdir).listFiles((d, n) -> n.endsWith(".md"));
         if (files == null) files = new File[0];
         java.util.Arrays.sort(files, java.util.Comparator.comparing(File::getName));
+        // ?q=TERM — full-text search over every item's markdown (mirrors the desktop
+        // md_collection): {"hits":[{id,title,count,snippet}]} sorted by match count.
+        // Checked BEFORE id so a search never joins a path; blank term falls through
+        // to the list, a no-match term returns an empty hits array (never the list).
+        if (q != null && !q.trim().isEmpty()) {
+            String needle = q.trim().toLowerCase();
+            java.util.List<Object[]> hits = new java.util.ArrayList<>();
+            for (File f : files) {
+                String md = readFile(f);
+                if (md == null) continue;
+                int count = countOccurrences(md.toLowerCase(), needle);
+                if (count == 0) continue;
+                String stem = f.getName().substring(0, f.getName().length() - 3);
+                String obj = "{\"id\":" + jstr(stem)
+                        + ",\"title\":" + jstr(mdTitle(md, stem))
+                        + ",\"count\":" + count
+                        + ",\"snippet\":" + jstr(mdSnippet(md, needle)) + "}";
+                hits.add(new Object[] { count, obj });
+            }
+            hits.sort((a, bb) -> Integer.compare((int) bb[0], (int) a[0]));
+            StringBuilder sb = new StringBuilder("{\"hits\":[");
+            for (int i = 0; i < hits.size(); i++) {
+                if (i > 0) sb.append(',');
+                sb.append((String) hits.get(i)[1]);
+            }
+            return sb.append("]}").toString();
+        }
         StringBuilder b = new StringBuilder("{");
         if (id == null) {
             b.append(jstr(listKey)).append(":[");
@@ -298,6 +325,35 @@ public class MainActivity extends Activity {
             b.append(jstr(itemKey)).append(':').append(item == null ? "null" : item);
         }
         return b.append('}').toString();
+    }
+
+    /** Count non-overlapping occurrences of {@code needle} in {@code hay} (both lowercased). */
+    static int countOccurrences(String hay, String needle) {
+        if (needle.isEmpty()) return 0;
+        int n = 0, i = 0;
+        while ((i = hay.indexOf(needle, i)) != -1) {
+            n++;
+            i += needle.length();
+        }
+        return n;
+    }
+
+    /**
+     * A short plain-text preview around the first match of {@code needleLower}
+     * (already lowercased) in {@code md}: collapses whitespace, drops the loudest
+     * markdown noise, and clamps indices so a preview never throws. Mirrors the
+     * desktop server's md_snippet.
+     */
+    static String mdSnippet(String md, String needleLower) {
+        int pos = md.toLowerCase().indexOf(needleLower);
+        if (pos < 0) pos = 0;
+        int start = Math.max(0, pos - 60);
+        int end = Math.min(md.length(), pos + needleLower.length() + 90);
+        String clean = md.substring(start, end)
+                .replaceAll("\\s+", " ")
+                .replaceAll("[#`*>]", "")
+                .trim();
+        return (start > 0 ? "…" : "") + clean + (end < md.length() ? "…" : "");
     }
 
     /**
@@ -373,11 +429,11 @@ public class MainActivity extends Activity {
                     // glossary_handler), so the gui works fully offline. These were
                     // silently falling through to null = "unavailable" (Paul's report).
                     if (path.endsWith("/api/lessons"))
-                        return json(mdCollection("lessons", "lessons", "lesson", req.getUrl().getQueryParameter("id")));
+                        return json(mdCollection("lessons", "lessons", "lesson", req.getUrl().getQueryParameter("id"), req.getUrl().getQueryParameter("q")));
                     if (path.endsWith("/api/quizzes"))
-                        return json(mdCollection("quizzes", "quizzes", "quiz", req.getUrl().getQueryParameter("id")));
+                        return json(mdCollection("quizzes", "quizzes", "quiz", req.getUrl().getQueryParameter("id"), req.getUrl().getQueryParameter("q")));
                     if (path.endsWith("/api/cheatsheets"))
-                        return json(mdCollection("cheatsheets", "cheatsheets", "cheatsheet", req.getUrl().getQueryParameter("id")));
+                        return json(mdCollection("cheatsheets", "cheatsheets", "cheatsheet", req.getUrl().getQueryParameter("id"), req.getUrl().getQueryParameter("q")));
                     if (path.endsWith("/api/glossary"))
                         return json(glossaryJson(req.getUrl().getQueryParameter("term")));
                     // Hint ladder, on-device: the seam runs the desktop ladder;
