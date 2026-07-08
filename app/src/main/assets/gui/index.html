@@ -497,11 +497,18 @@
   .lesson { padding:16px 20px; overflow:auto; }
   .lesson h1 { font-size:22px; font-weight:700; margin:2px 0 7px; line-height:1.22; letter-spacing:-.02em; }
   .lesson .sub { color:var(--fg-dim); font-size:12.5px; margin-bottom:9px; }
-  /* concept chip → tap for a glossary definition */
-  .gloss { color:var(--accent-soft); border-bottom:1px dotted var(--accent-soft); cursor:pointer; }
+  /* concept chip → tap for a glossary definition. Styled as a small tappable
+     PILL rather than dotted-underline text: as plain underlined text next to the
+     other metadata it was easy to miss, so learners never discovered the offline
+     definition it opens. The pill reads as interactive on touch (no hover). */
+  .gloss { display:inline-block; color:var(--accent); background:var(--bg-3);
+    border:1px solid var(--line); border-radius:999px; padding:0 9px; line-height:1.55;
+    font-size:.9em; font-weight:500; cursor:pointer; white-space:nowrap; vertical-align:baseline;
+    transition:border-color .15s ease, background .15s ease, color .15s ease; }
   .lesson-link { color:var(--note); font-weight:600; text-decoration:none; }
   .lesson-link:hover { text-decoration:underline; }
-  .gloss:hover, .gloss:focus-visible { color:var(--accent); border-bottom-style:solid; outline:none; }
+  .gloss:hover, .gloss:focus-visible { color:var(--fg); border-color:var(--accent); background:var(--bg-2); outline:none; }
+  .gloss.open { color:var(--fg); border-color:var(--accent); background:var(--bg-2); }
   .glossbox { margin:-4px 0 14px; padding:10px 13px; border:1px solid var(--line); border-left:3px solid var(--accent);
     border-radius:8px; background:var(--bg-2); font-size:13px; line-height:1.5; }
   .gl-term { font-weight:700; color:var(--fg); text-transform:capitalize; }
@@ -1647,6 +1654,7 @@
     let ideView = null;                 // the IDE's CodeMirror instance (per visit)
     let ideOpen = null;                 // { id, name, status, content } currently open
     const IDE_KEY = 'ts-ide-state';     // { openId, sidebarOpen, termOpen }
+    const IDE_BUF = 'ts-ide-buf:';      // per-file edit DRAFT (offline safety net; keyed by exercise id)
     const isPhone = () => window.matchMedia('(max-width:760px)').matches;
     function ideLoad() {
       try { const s = JSON.parse(localStorage.getItem(IDE_KEY) || 'null'); if (s && typeof s === 'object') return s; } catch (_) {}
@@ -1708,17 +1716,51 @@
       if (nameEl) nameEl.textContent = ideOpen ? ideOpen.name : 'no file open — pick one in 📂 Files';
       host.innerHTML = ''; ideView = null;
       if (!ideOpen) { host.innerHTML = '<div class="ide-empty">Open a file from the <b>📂 Files</b> explorer to edit it here.</div>'; return; }
+      // Restore an offline DRAFT if one exists (survives view-switch / reload /
+      // app-close, and is the ONLY persistence on mobile, where Save's PUT can't
+      // reach the embedded server). Falls back to the file's on-disk content.
+      let startDoc = ideOpen.content, restored = false;
+      try { const b = localStorage.getItem(IDE_BUF + ideOpen.id); if (b != null && b !== ideOpen.content) { startDoc = b; restored = true; } } catch (_) {}
       if (window.CM) {
         ideView = new CM.EditorView({
-          doc: ideOpen.content,
-          extensions: makeEditorExtensions('IDE Rust editor', () => ideRun()),
+          doc: startDoc,
+          extensions: [
+            ...makeEditorExtensions('IDE Rust editor', () => ideRun()),
+            CM.EditorView.updateListener.of(u => { if (u.docChanged) ideBufSave(); }),
+          ],
           parent: host,
         });
         try { ideView.scrollDOM.setAttribute('tabindex', '0'); } catch (_) {}
         try { window.ideView = ideView; } catch (_) {}
       } else {
-        host.innerHTML = '<textarea id="ideta" spellcheck="false" style="width:100%;height:100%;background:transparent;color:var(--fg);border:0;font-family:var(--mono);font-size:13px;padding:10px">' + esc(ideOpen.content) + '</textarea>';
+        host.innerHTML = '<textarea id="ideta" spellcheck="false" style="width:100%;height:100%;background:transparent;color:var(--fg);border:0;font-family:var(--mono);font-size:13px;padding:10px">' + esc(startDoc) + '</textarea>';
+        const ta = document.getElementById('ideta'); if (ta) ta.oninput = () => ideBufSave();
       }
+      const status = document.getElementById('idestatus');
+      if (status) status.textContent = restored ? 'draft restored ✏️' : 'ready';
+    }
+    // Persist the editor buffer to a per-file offline DRAFT (never lose work). A
+    // buffer equal to the on-disk content clears the draft, so localStorage only
+    // holds genuine unsaved edits. Mirrors Practice's markEdited (localStorage on
+    // every change) — the IDE lacked any such safety net.
+    function ideBufSave() {
+      if (!ideOpen) return;
+      const status = document.getElementById('idestatus');
+      try {
+        const t = ideEditorText();
+        if (t === ideOpen.content) localStorage.removeItem(IDE_BUF + ideOpen.id);
+        else localStorage.setItem(IDE_BUF + ideOpen.id, t);
+        if (status) status.textContent = (t === ideOpen.content) ? 'ready' : 'edited ✏️ · draft kept offline';
+      } catch (_) {}
+    }
+    // Discard the current draft and reload the file's on-disk content — the escape
+    // hatch that keeps draft-persistence from trapping you in your own edits.
+    function ideReset() {
+      if (!ideOpen) return;
+      try { localStorage.removeItem(IDE_BUF + ideOpen.id); } catch (_) {}
+      ideRenderEditor();
+      const status = document.getElementById('idestatus'); if (status) status.textContent = 'reset to the file';
+      if (ideView) setTimeout(() => { try { ideView.focus(); } catch (_) {} }, 0);
     }
     function ideEditorText() {
       return ideView ? ideView.state.doc.toString()
@@ -1729,9 +1771,12 @@
       document.querySelectorAll('#idetree .ide-file').forEach(el =>
         el.classList.toggle('open', !!ideOpen && el.dataset.id === ideOpen.id));
     }
-    // Save the buffer to the exercise source (PUT /api/workspace/file). Same gates
-    // as select: 409 done, 423 locked. This is a real persist (survives restarts),
-    // unlike the Sandbox's localStorage-only buffers.
+    // Save the buffer to the exercise source on DISK (PUT /api/workspace/file).
+    // Same gates as select: 409 done, 423 locked. This commits to disk (survives
+    // restarts) — the offline localStorage draft is the always-available safety
+    // net beneath it (and the only persistence on mobile, where this PUT can't
+    // reach the embedded server). On a successful disk save the draft is cleared,
+    // since the buffer now equals the on-disk content.
     async function ideSaveFile() {
       if (!ideOpen) return;
       const status = document.getElementById('idestatus');
@@ -1741,10 +1786,11 @@
         const res = await fetch('api/workspace/file', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ideOpen.id, content }) });
         if (res.status === 409) { if (status) status.textContent = 'done — reset in Practice to edit'; return; }
         if (res.status === 423) { if (status) status.textContent = 'locked'; return; }
-        if (!res.ok) { if (status) status.textContent = 'save failed (' + res.status + ')'; return; }
+        if (!res.ok) { if (status) status.textContent = 'save failed (' + res.status + ') · draft kept'; return; }
         ideOpen.content = content;
-        if (status) status.textContent = 'saved ✓';
-      } catch (_) { if (status) status.textContent = 'save failed (offline?)'; }
+        try { localStorage.removeItem(IDE_BUF + ideOpen.id); } catch (_) {}
+        if (status) status.textContent = 'saved to disk ✓';
+      } catch (_) { if (status) status.textContent = 'save failed (offline) · draft kept'; }
     }
     // Run the open buffer through the progress-neutral sandbox path (web
     // /api/sandbox, mobile Termux 'sandbox' op) and show the output in the IDE
@@ -1786,7 +1832,8 @@
         +   '<div class="ide-main">'
         +     '<div class="ide-editwrap">'
         +       '<div class="ide-toolbar"><button class="run" id="iderun" title="Run (Ctrl/Cmd+Enter)">▷ Run</button>'
-        +       '<button class="ghost" id="idesave" title="Save to the exercise file">💾 Save</button>'
+        +       '<button class="ghost" id="idesave" title="Save your edits to the file on disk">💾 Save</button>'
+        +       '<button class="ghost" id="idereset" title="Discard your edits and reload the file">↺ Reset</button>'
         +       '<span class="badge" id="idestatus">ready</span></div>'
         +       '<div class="ide-host" id="idehost"></div>'
         +     '</div>'
@@ -1812,6 +1859,7 @@
       };
       document.getElementById('iderun').onclick = () => ideRun();
       document.getElementById('idesave').onclick = () => ideSaveFile();
+      document.getElementById('idereset').onclick = () => ideReset();
       await ideRenderTree();
       if (st.openId) { await ideOpenFile(st.openId, null); }
       else { ideRenderEditor(); }
@@ -2511,9 +2559,11 @@
           if (a) a.onclick = e => { e.preventDefault(); showView('book', t.book_chapter); };
         }
         box.hidden = false;
+        const cc = document.getElementById('conceptChip'); if (cc) cc.classList.add('open');
+        const close = () => { box.hidden = true; box.innerHTML = ''; const c = document.getElementById('conceptChip'); if (c) c.classList.remove('open'); };
         const x = document.getElementById('glX');
-        if (x) { x.onclick = () => { box.hidden = true; box.innerHTML = ''; };
-          x.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { box.hidden = true; box.innerHTML = ''; } }; }
+        if (x) { x.onclick = close;
+          x.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') close(); }; }
       } catch (_) { /* offline without the local seam — leave the chip inert */ }
     }
 
@@ -2567,6 +2617,7 @@
       'move-semantics': '15b-moves',
       'move-while-borrowed': '16b-mutable-references',
       'move-out-of-borrow': '16-shared-references',
+      'dereference-non-reference': '16-shared-references',
       'assign-while-borrowed': '16b-mutable-references',
       'borrow-checker-one-mut': '16b-mutable-references',
       'borrow-checker-mut-vs-immut': '16b-mutable-references',
@@ -2616,6 +2667,85 @@
       'dynamically-sized-types': '32-trait-objects',
       'unsafe-raw-pointers': '34-unsafe',
     };
+
+    // Each Patina lesson → the canonical chapter of the bundled Rust Book that
+    // covers the same topic (file stems in book/; see /api/book). Lets a lesson
+    // link straight to the exact in-app chapter — topic-precise and offline —
+    // instead of only the coarse per-phase PDF. Partial by design: only lessons
+    // with a clear 1:1 chapter get the precise link; the rest fall back to the
+    // PDF "Read deeper" shelf. This is the reciprocal of the Book's book_refs and
+    // completes lesson↔Book switching (#41). Values MUST be real book/ stems.
+    const LESSON_BOOK = {
+      '01-bindings-and-immutability': 'ch03-01-variables-and-mutability',
+      '02-mutability': 'ch03-01-variables-and-mutability',
+      '03-shadowing': 'ch03-01-variables-and-mutability',
+      '04-constants': 'ch03-01-variables-and-mutability',
+      '05-scalar-types': 'ch03-02-data-types',
+      '05b-integer-overflow': 'ch03-02-data-types',
+      '13-tuples': 'ch03-02-data-types',
+      '13b-arrays': 'ch03-02-data-types',
+      '06-expressions-statements-semicolon': 'ch03-03-how-functions-work',
+      '07-functions': 'ch03-03-how-functions-work',
+      '09-if-else': 'ch03-05-control-flow',
+      '09b-if-as-expression': 'ch03-05-control-flow',
+      '10-loop-and-break': 'ch03-05-control-flow',
+      '10b-while': 'ch03-05-control-flow',
+      '10c-for-and-ranges': 'ch03-05-control-flow',
+      '15-ownership': 'ch04-01-what-is-ownership',
+      '15b-moves': 'ch04-01-what-is-ownership',
+      '15c-copy-and-clone': 'ch04-01-what-is-ownership',
+      '16-shared-references': 'ch04-02-references-and-borrowing',
+      '16b-mutable-references': 'ch04-02-references-and-borrowing',
+      '18-defining-structs': 'ch05-01-defining-structs',
+      '18b-methods-and-impl': 'ch05-03-method-syntax',
+      '19-enums': 'ch06-01-defining-an-enum',
+      '19b-option': 'ch06-01-defining-an-enum',
+      '11-match-intro': 'ch06-02-match',
+      '19c-match-in-depth': 'ch06-02-match',
+      '19d-concise-matching': 'ch06-02-match',
+      '22-paths': 'ch07-03-paths-for-referring-to-an-item-in-the-module-tree',
+      '22b-privacy-and-pub': 'ch07-03-paths-for-referring-to-an-item-in-the-module-tree',
+      '23-the-use-keyword': 'ch07-04-bringing-paths-into-scope-with-the-use-keyword',
+      '14-vec': 'ch08-01-vectors',
+      '12-string-vs-str': 'ch08-02-strings',
+      '14b-hashmap': 'ch08-03-hash-maps',
+      '20-result': 'ch09-02-recoverable-errors-with-result',
+      '20c-question-mark': 'ch09-02-recoverable-errors-with-result',
+      '24-generic-functions': 'ch10-01-syntax',
+      '24b-generic-types': 'ch10-01-syntax',
+      '25-traits-declare-implement': 'ch10-02-traits',
+      '25b-trait-bounds': 'ch10-02-traits',
+      '26-lifetime-annotations': 'ch10-03-lifetime-syntax',
+      '26b-lifetime-elision': 'ch10-03-lifetime-syntax',
+      '26c-lifetimes-in-structs': 'ch10-03-lifetime-syntax',
+      '27-closure-syntax': 'ch13-01-closures',
+      '27b-closure-capture': 'ch13-01-closures',
+      '28-iterator-cursor': 'ch13-02-iterators',
+      '28b-adapter-chains': 'ch13-02-iterators',
+      '29-box': 'ch15-01-box',
+      '29c-rc': 'ch15-04-rc',
+      '29d-refcell': 'ch15-05-interior-mutability',
+      '30-spawning-threads': 'ch16-01-threads',
+      '30b-channels': 'ch16-02-message-passing',
+      '30c-shared-state': 'ch16-03-shared-state',
+      '32-trait-objects': 'ch18-02-trait-objects',
+      '34-unsafe': 'ch20-01-unsafe-rust',
+      '34b-operator-overloading': 'ch20-02-advanced-traits',
+    };
+
+    // The reverse of LESSON_BOOK, derived (no second hand-maintained map): each
+    // bundled Book chapter → the PRIMARY Patina lesson on that topic (the lowest-
+    // numbered lesson that maps to it — i.e. the intro, not a follow-up split).
+    // Lets a Book chapter offer the gentler step-by-step lesson, completing the
+    // bidirectional lesson↔Book switching (#41).
+    const BOOK_LESSON = (() => {
+      const m = {}, numOf = (s) => parseInt(s, 10) || 0;
+      for (const [lesson, chap] of Object.entries(LESSON_BOOK)) {
+        const cur = m[chap];
+        if (!cur || numOf(lesson) < numOf(cur) || (numOf(lesson) === numOf(cur) && lesson < cur)) m[chap] = lesson;
+      }
+      return m;
+    })();
 
     function renderCurrent(j) {
       const ed = editorEl();
@@ -3675,11 +3805,18 @@
         // Companion original text: link to the phase's book in the offline Library,
         // so a curious learner can read the same topic in depth (#32 — books woven
         // into the lesson flow, not a separate shelf). Read fully offline.
-        const bk = phaseBook(quizId);
-        const bkLabel = bk.chapter ? `${bk.short} — “${bk.chapter}”` : bk.short;
-        const bookHtml = quizId
-          ? `<p class="lessonbook">📖 Read deeper: <a href="#" class="booklink" data-file="${esc(bk.file)}" data-page="${esc(bk.page)}">${esc(bkLabel)} (offline) →</a></p>`
-          : '';
+        // Topic-precise switch to the canonical Rust Book: link straight to the
+        // exact IN-APP chapter (fast, offline, cleanly rendered) when this lesson
+        // maps to one; otherwise fall back to the coarser per-phase PDF shelf.
+        const chap = LESSON_BOOK[id];
+        let bookHtml = '';
+        if (chap) {
+          bookHtml = `<p class="lessonbook">📖 Read this topic in the Rust Book: <a href="#" class="bookchlink" data-ch="${esc(chap)}">the chapter (offline) →</a></p>`;
+        } else if (quizId) {
+          const bk = phaseBook(quizId);
+          const bkLabel = bk.chapter ? `${bk.short} — “${bk.chapter}”` : bk.short;
+          bookHtml = `<p class="lessonbook">📖 Read deeper: <a href="#" class="booklink" data-file="${esc(bk.file)}" data-page="${esc(bk.page)}">${esc(bkLabel)} (offline) →</a></p>`;
+        }
         d.innerHTML = back + prevNextHtml + '<div class="bookbody lessonbody">' + mdToHtml(md) + '</div>'
           + cheatHtml + bookHtml + practiceHtml + quizHtml + prevNextHtml;
         glossaryLinkify(d.querySelector('.lessonbody'), await glossaryTerms());
@@ -3699,6 +3836,9 @@
         a.onclick = e => { e.preventDefault(); showView('cheatsheets', a.dataset.cheat); });
       d.querySelectorAll('.booklink').forEach(a =>
         a.onclick = e => { e.preventDefault(); showView('library', a.dataset.file, a.dataset.page); });
+      // Topic-precise switch to the canonical in-app Rust Book chapter.
+      d.querySelectorAll('.bookchlink').forEach(a =>
+        a.onclick = e => { e.preventDefault(); showView('book', a.dataset.ch); });
       // Wire the nav bar: a `.md` href routes to that lesson; the Study Guide link
       // renders the curriculum study guide — all in-app, no page navigation.
       d.querySelectorAll('.lessonnavlink').forEach(a => {
@@ -3798,6 +3938,32 @@
         a.onclick = e => { e.preventDefault(); renderBook(a.dataset.ch, null, a.dataset.term); });
     }
 
+    // The bundled Book chapters are RAW mdBook source: the actual code listings
+    // live in a `listings/` tree that ISN'T shipped (offline size), so every
+    // `{{#rustdoc_include …}}` / `{{#include …}}` used to leak into the reader as
+    // literal `{{#…}}` noise inside an empty code block — 364 of them across the
+    // 33 chapters. Rather than show that, surface what IS useful: the mdBook
+    // `<Listing number caption>` context, plus a nudge to write the example in the
+    // Sandbox (charter: learn by doing, don't hand finished code). Pure display —
+    // the source files are untouched, and this runs for web AND mobile (both
+    // render the Book through this same path).
+    function cleanBookMarkdown(md) {
+      if (!md) return md;
+      let s = md;
+      // A code/console fence whose only content is an include directive → a clean
+      // one-line placeholder (rust = an example to try; console/text = its output).
+      s = s.replace(/```(\w*)[ \t]*\r?\n[ \t]*\{\{#[^\n]*\}\}[ \t]*\r?\n```/g, (_m, lang) =>
+        (/^(console|text|output|bash|sh)$/i.test(lang)
+          ? '*↪ Program output — run the example to see it.*'
+          : '*↪ Code example — write and run it yourself in the 🧪 Sandbox.*'));
+      // mdBook <Listing> wrapper → a bold caption line the reader can actually use.
+      s = s.replace(/<Listing\b[^>]*\bnumber="([^"]*)"[^>]*\bcaption="([^"]*)"[^>]*>/g, (_m, n, cap) => `**Listing ${n}.** ${cap}\n`);
+      s = s.replace(/<Listing\b[^>]*\bcaption="([^"]*)"[^>]*>/g, (_m, cap) => `**${cap}**\n`);
+      s = s.replace(/<\/?Listing\b[^>]*>/g, '');
+      // Any stray directive left (bare, not in a fence) → drop the line.
+      s = s.replace(/^[ \t]*\{\{#[^\n]*\}\}[ \t]*\r?\n?/gm, '');
+      return s;
+    }
     async function renderBook(chapter, anchor, term) {
       const d = freshDocview();
       const refs = curBookRefs || [];
@@ -3818,7 +3984,7 @@
         const items = toc.chapters || [];
         d.innerHTML = '<h1>📖 The Rust Book</h1>'
           + '<div class="booksearch"><input id="bsq" type="search" placeholder="Search the book…" aria-label="Search the Rust Book" autocomplete="off" autocapitalize="off" spellcheck="false"><div id="bsr" class="bsresults" aria-live="polite"></div></div>'
-          + `<p style="color:var(--fg-dim)">${items.length} embedded chapters — click one to read. Source is raw Book text, so a few include directives show through.</p>`
+          + `<p style="color:var(--fg-dim)">${items.length} embedded chapters — click one to read, fully offline.</p>`
           + quick
           + (items.length
             ? '<ul class="booktoc">' + items.map(c =>
@@ -3855,7 +4021,15 @@
             + (next ? `<a href="#" class="bookjump booknav-next" data-ch="${esc(next.id)}"><span class="booknav-dir">next →</span><span class="booknav-ttl">${esc(next.title)}</span></a>` : '<span></span>')
             + '</nav>'
           : '';
-        d.innerHTML = back + '<div class="bookbody">' + mdToHtml(ch.markdown) + '</div>' + navRow;
+        // The reciprocal of the lesson's "read the chapter" link: offer the gentler
+        // step-by-step Patina lesson on this topic (bidirectional switching, #41).
+        const patinaLesson = BOOK_LESSON[chapter];
+        const patinaHtml = patinaLesson
+          ? `<p class="lessonbook bookpatina">📗 New to this topic? <a href="#" class="patinalink lesson-link" data-lesson="${esc(patinaLesson)}">Learn it step-by-step in the Patina lesson →</a></p>`
+          : '';
+        d.innerHTML = back + patinaHtml + '<div class="bookbody">' + mdToHtml(cleanBookMarkdown(ch.markdown)) + '</div>' + navRow;
+        d.querySelectorAll('.patinalink').forEach(a =>
+          a.onclick = e => { e.preventDefault(); showView('lessons', a.dataset.lesson); });
         // Tap-to-define here too: a beginner reading an early chapter hits terms
         // from LATER ones (a forward reference like `closure` or `Vec`) — tapping
         // reveals the plain-language definition. Skips code, so examples are
