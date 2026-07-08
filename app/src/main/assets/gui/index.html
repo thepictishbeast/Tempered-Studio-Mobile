@@ -590,6 +590,13 @@
     outline:none; }
   .pin:focus { border-color:var(--accent); }
   .pv { font-size:12.5px; font-weight:600; }
+  /* The predict verdict now shows in the (visible) locked summary. A PERFECT
+     prediction (outcome AND error code both right) earns a brief pop — reinforcing
+     the predict-first habit. The 🎯 stays under reduced motion. */
+  .pv-verdict { font-weight:600; }
+  .pv-perfect { display:inline-block; animation:predictNailed .8s cubic-bezier(.2,.8,.3,1) 1; }
+  @keyframes predictNailed { 0%{transform:scale(1)} 22%{transform:scale(1.13)} 55%{transform:scale(.98)} 100%{transform:scale(1)} }
+  @media (prefers-reduced-motion: reduce){ .pv-perfect{ animation:none } }
   .editor { margin:0 20px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-2);
     box-shadow:var(--shadow), inset 0 1px 0 var(--edge-hi); overflow:hidden; }
   .editor .bar { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line);
@@ -729,10 +736,15 @@
   .xppanel .badgegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:9px}
   .badge{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;
     border:1px solid var(--line);border-radius:10px;padding:9px 6px;background:var(--bg-3)}
-  .badge.locked{opacity:.4;filter:grayscale(1)}
+  /* Dim only the ICON on a locked badge, so its name + progress stay readable
+     (the progress "12/20" is the whole point of showing a locked badge). */
+  .badge.locked{background:var(--bg-2)}
+  .badge.locked .bi{opacity:.45;filter:grayscale(1)}
   .badge .bi{font-size:22px;line-height:1}
   .badge .bn{font-size:10.5px;color:var(--fg-dim);font-weight:600}
   .badge.earned .bn{color:var(--fg)}
+  .badge .bgoal{font-size:9.5px;font-weight:700;color:var(--fg-dim);letter-spacing:.02em}
+  .badge .bgoal.earned{color:var(--done)}
   .xptoast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(10px) scale(.96);z-index:85;
     background:linear-gradient(135deg,var(--accent),#ffb37a);color:#1a1207;border-radius:12px;padding:11px 18px;
     font-size:13.5px;font-weight:700;box-shadow:var(--shadow);opacity:0;pointer-events:none;
@@ -1197,14 +1209,17 @@
     const GAMIFY_KEY = 'ts-gamify';
     const XP_PER_EXERCISE = 10;        // xp = doneExercises * this
     const LEVEL_SIZE = 5;              // exercises per level
+    // `kind`+`goal`+`need` let a LOCKED badge show HOW to earn it and how close you
+    // are ("12/20"), instead of a mystery lock. `test` stays the source of truth
+    // for awarding (kind/goal are display only, derived to match it).
     const BADGES = [
-      { id: 'first',  icon: '🌱', name: 'First step',    test: (d) => d >= 1 },
-      { id: 'five',   icon: '⭐', name: 'Getting going',  test: (d) => d >= 5 },
-      { id: 'ten',    icon: '🔟', name: 'Double digits',  test: (d) => d >= 10 },
-      { id: 'twenty', icon: '🏅', name: 'Twenty done',    test: (d) => d >= 20 },
-      { id: 'fifty',  icon: '🏆', name: 'Fifty strong',   test: (d) => d >= 50 },
-      { id: 's3',     icon: '🔥', name: '3-day streak',   test: (d, s) => s >= 3 },
-      { id: 's7',     icon: '🔥', name: 'Week strong',    test: (d, s) => s >= 7 },
+      { id: 'first',  icon: '🌱', name: 'First step',    kind: 'done',   goal: 1,  need: 'Solve 1 exercise',         test: (d) => d >= 1 },
+      { id: 'five',   icon: '⭐', name: 'Getting going',  kind: 'done',   goal: 5,  need: 'Solve 5 exercises',        test: (d) => d >= 5 },
+      { id: 'ten',    icon: '🔟', name: 'Double digits',  kind: 'done',   goal: 10, need: 'Solve 10 exercises',       test: (d) => d >= 10 },
+      { id: 'twenty', icon: '🏅', name: 'Twenty done',    kind: 'done',   goal: 20, need: 'Solve 20 exercises',       test: (d) => d >= 20 },
+      { id: 'fifty',  icon: '🏆', name: 'Fifty strong',   kind: 'done',   goal: 50, need: 'Solve 50 exercises',       test: (d) => d >= 50 },
+      { id: 's3',     icon: '🔥', name: '3-day streak',   kind: 'streak', goal: 3,  need: 'Practise 3 days running',  test: (d, s) => s >= 3 },
+      { id: 's7',     icon: '🔥', name: 'Week strong',    kind: 'streak', goal: 7,  need: 'Practise 7 days running',  test: (d, s) => s >= 7 },
     ];
     // Level (1-based) and progress toward the next, from the best-ever done count.
     function xpLevel(best) { return Math.floor(best / LEVEL_SIZE) + 1; }
@@ -1294,8 +1309,14 @@
         + toNext + ' more to level up</p>'
         + '<div class="badgegrid">' + BADGES.map(b => {
             const got = (s.earned || []).includes(b.id);
-            return '<div class="badge ' + (got ? 'earned' : 'locked') + '" title="' + esc(b.name) + (got ? '' : ' (locked)') + '">'
-              + '<span class="bi" aria-hidden="true">' + b.icon + '</span><span class="bn">' + esc(b.name) + '</span></div>';
+            // Locked → show the criterion ("Solve 20 exercises") + how close you are
+            // ("12/20"), so a badge is a clear goal, not a mystery lock.
+            const cur = b.kind === 'streak' ? (s.streak || 0) : (s.bestDone || 0);
+            const sub = got
+              ? '<span class="bgoal earned">earned ✓</span>'
+              : '<span class="bgoal">' + Math.min(cur, b.goal) + '/' + b.goal + (b.kind === 'streak' ? ' 🔥' : '') + '</span>';
+            return '<div class="badge ' + (got ? 'earned' : 'locked') + '" title="' + esc(b.name) + (got ? ' — earned' : ' — ' + esc(b.need)) + '">'
+              + '<span class="bi" aria-hidden="true">' + b.icon + '</span><span class="bn">' + esc(b.name) + '</span>' + sub + '</div>';
           }).join('') + '</div>';
       document.body.appendChild(p);
       if (chip) chip.setAttribute('aria-expanded', 'true');
@@ -1306,15 +1327,17 @@
     }
     // Ephemeral congrats on COMPLETING an exercise (fires on advance, so once per
     // exercise — no re-run spam). Animates in, holds, fades out; non-interactive.
-    function celebrate(nextId) {
+    function celebrate(nextId, nextTitle) {
       let c = document.getElementById('celebrate');
       if (!c) {
         c = document.createElement('div'); c.id = 'celebrate';
         c.setAttribute('role', 'status'); c.setAttribute('aria-live', 'polite');
         document.body.appendChild(c);
       }
+      // Show the friendly lesson title ("Sometimes the compiler needs a type
+      // annotation"), not the raw id slug ("basics/02_annotation_needed").
       c.innerHTML = '<div class="cg-h">🎉 Exercise complete!</div>'
-        + (nextId ? '<div class="cg-s">Next up: ' + esc(nextId) + '</div>'
+        + (nextId ? '<div class="cg-s">Next up: ' + esc(nextTitle || nextId) + '</div>'
                   : '<div class="cg-s">That was the last one — nice work.</div>');
       c.classList.remove('show'); void c.offsetWidth; // restart the CSS animation
       c.classList.add('show');
@@ -2056,10 +2079,11 @@
         } catch (_) {}
         try { const exs = await fetch('api/exercises').then(r => r.json()); if (exs) renderList(exs); } catch (_) {}
         if (advancedTo) {
-          term.writeln(''); term.writeln(g('✓ exercise complete — advancing to ' + advancedTo));
-          try { const cur = await fetch('api/current').then(r => r.json()); renderCurrent(cur); } catch (_) {}
+          let nextTitle = null;
+          try { const cur = await fetch('api/current').then(r => r.json()); renderCurrent(cur); nextTitle = cur && cur.title; } catch (_) {}
+          term.writeln(''); term.writeln(g('✓ exercise complete — advancing to ' + (nextTitle || advancedTo)));
           statusEl().textContent = 'advanced ✓';
-          celebrate(advancedTo);
+          celebrate(advancedTo, nextTitle);
         }
       }
       // Gate ONCE per exercise (Paul): the prediction persists after a run so you
@@ -2124,10 +2148,11 @@
         try { const exs = await fetch('api/exercises').then(r => r.json()); if (exs) renderList(exs); } catch (_) {}
         try { const rev = await fetch('api/review').then(r => r.json()); renderReview(rev); } catch (_) {}
         if (out.advanced_to) {
-          term.writeln(''); term.writeln(g('✓ exercise complete — advancing to ' + out.advanced_to));
-          try { const cur = await fetch('api/current').then(r => r.json()); renderCurrent(cur); } catch (_) {}
+          let nextTitle = null;
+          try { const cur = await fetch('api/current').then(r => r.json()); renderCurrent(cur); nextTitle = cur && cur.title; } catch (_) {}
+          term.writeln(''); term.writeln(g('✓ exercise complete — advancing to ' + (nextTitle || out.advanced_to)));
           statusEl().textContent = 'advanced ✓';
-          celebrate(out.advanced_to);
+          celebrate(out.advanced_to, nextTitle);
         }
       } catch (e) {
         logEvent('net', 'info', 'local /api/run unavailable (' + (e && e.message || e) + ') — routing to on-device path');
@@ -2525,14 +2550,32 @@
       const parts = [compRight
         ? '✓ outcome: right'
         : `✗ you said it ${predict.compiles ? 'passes' : 'fails'}, it ${actualPasses ? 'passed' : 'failed'}`];
-      if (predict.code.trim()) {
-        const guess = predict.code.trim().toUpperCase();
-        if (actualCode && guess === actualCode.toUpperCase()) parts.push(`✓ error ${actualCode} — nailed it`);
-        else if (actualCode) parts.push(`✗ error: you guessed ${guess}, it was ${actualCode}`);
-        else parts.push('(no error code this run)');
+      const guessed = predict.code.trim().toUpperCase();
+      let codeRight = !guessed;                 // no code guessed → outcome is what's judged
+      if (guessed) {
+        if (actualCode && guessed === actualCode.toUpperCase()) { parts.push(`✓ error ${actualCode} — nailed it`); codeRight = true; }
+        else if (actualCode) { parts.push(`✗ error: you guessed ${guessed}, it was ${actualCode}`); codeRight = false; }
+        else { parts.push('(no error code this run)'); codeRight = false; } // guessed a code, but it passed
       }
-      el.textContent = parts.join(' · ');
-      el.style.color = compRight ? 'var(--done)' : 'var(--error)';
+      // A PERFECT prediction: outcome right AND (no code guessed, or the code matched).
+      const perfect = compRight && codeRight;
+      const verdict = (perfect ? '🎯 ' : '') + parts.join(' · ');
+      const color = compRight ? 'var(--done)' : 'var(--error)';
+      // Surface the verdict where the learner ACTUALLY looks: the visible locked
+      // summary (#predictDone). #predictbar collapses to display:none once answered,
+      // so the old #predverdict inside it was written but never seen — the whole
+      // payoff of predict-first ("were you right?") was invisible. Keeps the
+      // "change" link (wired by delegation) so re-predicting still works.
+      const done = document.getElementById('predictDone');
+      if (done && !done.hidden) {
+        done.innerHTML = '✓ Predicted: <b>' + (predict.compiles ? 'passes' : 'fails') + '</b>'
+          + (predict.code ? ' (' + esc(predict.code) + ')' : '')
+          + ' · <span class="pv-verdict' + (perfect ? ' pv-perfect' : '') + '" style="color:' + color + '">' + esc(verdict) + '</span>'
+          + ' · <a href="#" id="predictChange">change</a>';
+        if (perfect) { const s = done.querySelector('.pv-perfect'); if (s) void s.offsetWidth; } // replay the pop
+      }
+      // Keep the legacy hidden span in sync (harmless if unseen).
+      if (el) { el.textContent = verdict; el.style.color = color; }
     }
     const lsKey = id => 'ts-edit:' + id;
 
@@ -2604,6 +2647,7 @@
       'explicit-numeric-conversion': '05-scalar-types',
       'function-arg-types': '07-functions',
       'function-argument-count': '07-functions',
+      'duplicate-definition': '07-functions',
       'if-as-expression': '09b-if-as-expression',
       'loop-break-value': '10-loop-and-break',
       'loop-variable-scope': '10c-for-and-ranges',
